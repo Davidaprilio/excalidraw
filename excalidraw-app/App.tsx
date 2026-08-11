@@ -148,6 +148,9 @@ import "./index.scss";
 
 import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";
 import { AppSidebar } from "./components/AppSidebar";
+import { serverData } from "./data/ServerData";
+import { SelfHostedAppWrapper } from "./SelfHostedApp";
+import { Dashboard } from "./components/Dashboard";
 
 import type { CollabAPI } from "./collab/Collab";
 
@@ -225,6 +228,37 @@ const initializeScene = async (opts: {
 > => {
   const searchParams = new URLSearchParams(window.location.search);
   const id = searchParams.get("id");
+
+  // Self-hosted: load scene from server if we have a scene ID
+  if (import.meta.env.VITE_APP_SELF_HOSTED === "true") {
+    const pathMatch = window.location.pathname.match(/^\/s\/(.+)$/);
+    const urlSceneId = pathMatch ? pathMatch[1] : null;
+    const serverSceneId =
+      urlSceneId || localStorage.getItem("excalidraw-last-scene-id");
+    if (serverSceneId && !id && !window.location.hash.match(/^#(json|room)=/)) {
+      try {
+        const serverScene = await serverData.load(serverSceneId);
+        if (serverScene) {
+          const localDataState = importFromLocalStorage();
+          return {
+            scene: {
+              elements: restoreElements(serverScene.elements, null, {
+                repairBindings: true,
+                deleteInvisibleElements: true,
+              }),
+              appState: restoreAppState(
+                serverScene.appState,
+                localDataState?.appState,
+              ),
+            },
+            isExternalScene: false,
+          };
+        }
+      } catch (err) {
+        console.warn("Failed to load scene from server:", err);
+      }
+    }
+  }
   const jsonBackendMatch = window.location.hash.match(
     /^#json=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/,
   );
@@ -751,6 +785,11 @@ const ExcalidrawWrapper = () => {
           }
         }
       });
+    }
+
+    // Server sync (self-hosted mode)
+    if (import.meta.env.VITE_APP_SELF_HOSTED === "true") {
+      serverData.save(Array.from(elements), appState);
     }
 
     // Render the debug scene if the debug canvas is available
@@ -1308,6 +1347,12 @@ const ExcalidrawApp = () => {
     return <ExcalidrawPlusIframeExport />;
   }
 
+  const isSelfHosted = import.meta.env.VITE_APP_SELF_HOSTED === "true";
+
+  if (isSelfHosted) {
+    return <SelfHostedRouting />;
+  }
+
   return (
     <TopErrorBoundary>
       <Provider store={appJotaiStore}>
@@ -1318,5 +1363,37 @@ const ExcalidrawApp = () => {
     </TopErrorBoundary>
   );
 };
+
+function SelfHostedRouting() {
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const onPopState = () => setCurrentPath(window.location.pathname);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const sceneMatch = currentPath.match(/^\/s\/(.+)$/);
+
+  if (!sceneMatch) {
+    return <SelfHostedAppWrapper>{() => <Dashboard />}</SelfHostedAppWrapper>;
+  }
+
+  const sceneKey = sceneMatch[1] || "new";
+
+  return (
+    <SelfHostedAppWrapper>
+      {() => (
+        <TopErrorBoundary>
+          <Provider store={appJotaiStore}>
+            <ExcalidrawAPIProvider key={sceneKey}>
+              <ExcalidrawWrapper />
+            </ExcalidrawAPIProvider>
+          </Provider>
+        </TopErrorBoundary>
+      )}
+    </SelfHostedAppWrapper>
+  );
+}
 
 export default ExcalidrawApp;
