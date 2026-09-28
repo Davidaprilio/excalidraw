@@ -6,6 +6,8 @@ import React from "react";
 
 import { isExcalidrawPlusSignedUser } from "../app_constants";
 
+const IS_SELF_HOSTED = import.meta.env.VITE_APP_SELF_HOSTED === "true";
+
 export const AppWelcomeScreen: React.FC<{
   onCollabDialogOpen: () => any;
   isCollabEnabled: boolean;
@@ -57,14 +59,15 @@ export const AppWelcomeScreen: React.FC<{
           {headingContent}
         </WelcomeScreen.Center.Heading>
         <WelcomeScreen.Center.Menu>
-          <WelcomeScreen.Center.MenuItemLoadScene />
+          {/* self-hosted boards live on the server; opening a file would replace this board */}
+          {!IS_SELF_HOSTED && <WelcomeScreen.Center.MenuItemLoadScene />}
           <WelcomeScreen.Center.MenuItemHelp />
           {props.isCollabEnabled && (
             <WelcomeScreen.Center.MenuItemLiveCollaborationTrigger
               onSelect={() => props.onCollabDialogOpen()}
             />
           )}
-          {!isExcalidrawPlusSignedUser && (
+          {!IS_SELF_HOSTED && !isExcalidrawPlusSignedUser && (
             <WelcomeScreen.Center.MenuItemLink
               href={`${
                 import.meta.env.VITE_APP_PLUS_LP

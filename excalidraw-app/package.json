@@ -52,6 +52,8 @@
     "build:preview": "yarn build && vite preview --port 5000"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "tailwindcss": "4.3.3",
     "vite-plugin-sitemap": "0.7.1"
   }
 }

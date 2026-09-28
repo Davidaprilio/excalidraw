@@ -1,9 +1,8 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState } from "react";
 
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
 import { RegisterPage } from "./auth/RegisterPage";
-import { serverData } from "./data/ServerData";
 
 import type { ReactNode } from "react";
 
@@ -67,47 +66,10 @@ function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export function SelfHostedAppWrapper({
-  children,
-}: {
-  children: (props: {
-    onServerSave: (elements: any, appState: any, files: any) => void;
-    currentSceneId: string | null;
-  }) => ReactNode;
-}) {
-  const [currentSceneId, setCurrentSceneId] = useState<string | null>(null);
-  const sceneIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const lastSceneId = localStorage.getItem("excalidraw-last-scene-id");
-    if (lastSceneId) {
-      sceneIdRef.current = lastSceneId;
-      setCurrentSceneId(lastSceneId);
-      serverData.setCurrentSceneId(lastSceneId);
-    }
-  }, []);
-
-  const handleServerSave = useCallback(
-    (elements: any, appState: any, _files: any) => {
-      serverData.save(elements, appState).then((id) => {
-        if (id && id !== sceneIdRef.current) {
-          sceneIdRef.current = id;
-          setCurrentSceneId(id);
-          localStorage.setItem("excalidraw-last-scene-id", id);
-        }
-      });
-    },
-    [],
-  );
-
+export function SelfHostedAppWrapper({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
-      <AuthGate>
-        {children({
-          onServerSave: handleServerSave,
-          currentSceneId,
-        })}
-      </AuthGate>
+      <AuthGate>{children}</AuthGate>
     </AuthProvider>
   );
 }

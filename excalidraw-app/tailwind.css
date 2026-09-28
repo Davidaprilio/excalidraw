@@ -1,0 +1,46 @@
+/*
+ * Tailwind for the self-hosted dashboard pages. Only theme + utilities are
+ * loaded: Tailwind's global preflight reset would restyle the Excalidraw
+ * editor, so a minimal reset is scoped to `.dashboard-root` instead.
+ * (Must be a .css file: @tailwindcss/vite doesn't process .scss.)
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@layer base {
+  .dashboard-root,
+  .dashboard-root *,
+  .dashboard-root ::before,
+  .dashboard-root ::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  .dashboard-root {
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .dashboard-root :is(h1, h2, h3, p) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .dashboard-root a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  .dashboard-root :is(button, input, select) {
+    font: inherit;
+    color: inherit;
+    background-color: transparent;
+  }
+  .dashboard-root :is(img, svg) {
+    display: block;
+    max-width: 100%;
+  }
+  .dashboard-root kbd {
+    font-family: inherit;
+  }
+}

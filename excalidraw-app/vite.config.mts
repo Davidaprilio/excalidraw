@@ -7,6 +7,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import checker from "vite-plugin-checker";
 import { createHtmlPlugin } from "vite-plugin-html";
 import Sitemap from "vite-plugin-sitemap";
+import tailwindcss from "@tailwindcss/vite";
 import { woff2BrowserPlugin } from "../scripts/woff2/woff2-vite-plugins";
 export default defineConfig(({ mode }) => {
   // To load .env variables
@@ -21,6 +22,11 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: "http://127.0.0.1:4001",
           changeOrigin: true,
+        },
+        // live collaboration room server (excalidraw-room), see docker-compose.yml
+        "/socket.io": {
+          target: "http://127.0.0.1:3002",
+          ws: true,
         },
       },
     },
@@ -138,6 +144,7 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: 0,
     },
     plugins: [
+      tailwindcss(),
       Sitemap({
         hostname: "https://excalidraw.com",
         outDir: "build",

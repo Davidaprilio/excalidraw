@@ -2,8 +2,10 @@ import {
   loginIcon,
   ExcalLogo,
   eyeIcon,
+  chevronLeftIcon,
+  DuplicateIcon,
 } from "@excalidraw/excalidraw/components/icons";
-import { MainMenu } from "@excalidraw/excalidraw/index";
+import { MainMenu, useExcalidrawAPI } from "@excalidraw/excalidraw/index";
 import React from "react";
 
 import { isDevEnv } from "@excalidraw/common";
@@ -12,8 +14,12 @@ import type { Theme } from "@excalidraw/element/types";
 
 import { LanguageList } from "../app-language/LanguageList";
 import { isExcalidrawPlusSignedUser } from "../app_constants";
+import { serverData } from "../data/ServerData";
+import { navigateTo } from "../navigation";
 
 import { saveDebugState } from "./DebugCanvas";
+
+const IS_SELF_HOSTED = import.meta.env.VITE_APP_SELF_HOSTED === "true";
 
 export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
@@ -22,11 +28,44 @@ export const AppMainMenu: React.FC<{
   theme: Theme | "system";
   refresh: () => void;
 }> = React.memo((props) => {
+  const excalidrawAPI = useExcalidrawAPI();
+
+  const saveAsCopy = async () => {
+    try {
+      const copyId = await serverData.duplicateCurrentScene();
+      if (!copyId) {
+        excalidrawAPI?.setToast({ message: "Draw something first to copy it" });
+        return;
+      }
+      navigateTo(`/s/${copyId}`);
+    } catch (err) {
+      console.error("Save as copy failed:", err);
+      excalidrawAPI?.setToast({ message: "Couldn't copy this drawing" });
+    }
+  };
+
   return (
     <MainMenu>
-      <MainMenu.DefaultItems.LoadScene />
-      <MainMenu.DefaultItems.SaveToActiveFile />
-      <MainMenu.DefaultItems.Export />
+      {IS_SELF_HOSTED ? (
+        <>
+          <MainMenu.Item
+            icon={chevronLeftIcon}
+            onSelect={() => navigateTo("/")}
+          >
+            Back to dashboard
+          </MainMenu.Item>
+          <MainMenu.Separator />
+          <MainMenu.Item icon={DuplicateIcon} onSelect={saveAsCopy}>
+            Save as copy
+          </MainMenu.Item>
+        </>
+      ) : (
+        <>
+          <MainMenu.DefaultItems.LoadScene />
+          <MainMenu.DefaultItems.SaveToActiveFile />
+          <MainMenu.DefaultItems.Export />
+        </>
+      )}
       <MainMenu.DefaultItems.SaveAsImage />
       {props.isCollabEnabled && (
         <MainMenu.DefaultItems.LiveCollaborationTrigger
@@ -38,26 +77,30 @@ export const AppMainMenu: React.FC<{
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.DefaultItems.Help />
       <MainMenu.DefaultItems.ClearCanvas />
-      <MainMenu.Separator />
-      <MainMenu.ItemLink
-        icon={ExcalLogo}
-        href={`${
-          import.meta.env.VITE_APP_PLUS_LP
-        }/plus?utm_source=excalidraw&utm_medium=app&utm_content=hamburger`}
-        className=""
-      >
-        Excalidraw+
-      </MainMenu.ItemLink>
-      <MainMenu.DefaultItems.Socials />
-      <MainMenu.ItemLink
-        icon={loginIcon}
-        href={`${import.meta.env.VITE_APP_PLUS_APP}${
-          isExcalidrawPlusSignedUser ? "" : "/sign-up"
-        }?utm_source=signin&utm_medium=app&utm_content=hamburger`}
-        className="highlighted"
-      >
-        {isExcalidrawPlusSignedUser ? "Sign in" : "Sign up"}
-      </MainMenu.ItemLink>
+      {!IS_SELF_HOSTED && (
+        <>
+          <MainMenu.Separator />
+          <MainMenu.ItemLink
+            icon={ExcalLogo}
+            href={`${
+              import.meta.env.VITE_APP_PLUS_LP
+            }/plus?utm_source=excalidraw&utm_medium=app&utm_content=hamburger`}
+            className=""
+          >
+            Excalidraw+
+          </MainMenu.ItemLink>
+          <MainMenu.DefaultItems.Socials />
+          <MainMenu.ItemLink
+            icon={loginIcon}
+            href={`${import.meta.env.VITE_APP_PLUS_APP}${
+              isExcalidrawPlusSignedUser ? "" : "/sign-up"
+            }?utm_source=signin&utm_medium=app&utm_content=hamburger`}
+            className="highlighted"
+          >
+            {isExcalidrawPlusSignedUser ? "Sign in" : "Sign up"}
+          </MainMenu.ItemLink>
+        </>
+      )}
       {isDevEnv() && (
         <MainMenu.Item
           icon={eyeIcon}

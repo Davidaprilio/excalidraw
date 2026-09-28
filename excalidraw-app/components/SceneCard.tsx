@@ -1,301 +1,174 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import api from "../data/api";
+import { ensureSceneThumbnail } from "../data/thumbnails";
 
-interface Scene {
-  id: string;
-  title: string;
-  version: number;
-  is_shared: boolean;
-  created_at: string;
-  updated_at: string;
-  owner_name: string;
-}
+import { DashboardIcon, MoreIcon } from "./dashboard/icons";
+import { DropdownMenu, timeAgo } from "./dashboard/ui";
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
+import type { MenuItem } from "./dashboard/ui";
+import type { SceneSummary } from "../data/api";
 
-  if (mins < 1) {
-    return "Just now";
-  }
-  if (mins < 60) {
-    return `${mins}m ago`;
-  }
-  if (hours < 24) {
-    return `${hours}h ago`;
-  }
-  if (days < 7) {
-    return `${days}d ago`;
-  }
-  return d.toLocaleDateString();
+/** Object URL of the scene's thumbnail, generating it first if missing or stale. */
+function useSceneThumbnail(scene: SceneSummary): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  const { id, version, thumbnail_version, has_content, deleted_at } = scene;
+
+  useEffect(() => {
+    if (!has_content) {
+      setUrl(null);
+      return;
+    }
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    (async () => {
+      let thumbnailVersion = thumbnail_version;
+      // trashed scenes can't be loaded for rendering; show whatever exists
+      if (
+        !deleted_at &&
+        (thumbnailVersion === null || thumbnailVersion < version)
+      ) {
+        // keep showing an older thumbnail if regenerating fails
+        thumbnailVersion = await ensureSceneThumbnail(id, version).catch(
+          (err) => {
+            console.warn("Thumbnail generation failed:", err);
+            return thumbnail_version;
+          },
+        );
+      }
+      if (thumbnailVersion === null || cancelled) {
+        return;
+      }
+      const blob = await api.getSceneThumbnail(id);
+      if (blob && !cancelled) {
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [id, version, thumbnail_version, has_content, deleted_at]);
+
+  return url;
 }
 
 export function SceneCard({
   scene,
+  menuItems,
   onOpen,
-  onDelete,
-  onShare,
+  renaming,
   onRename,
+  onRenameCancel,
 }: {
-  scene: Scene;
-  onOpen: (id: string) => void;
-  onDelete: (id: string) => void;
-  onShare: (id: string) => void;
-  onRename: (id: string, newTitle: string) => void;
+  scene: SceneSummary;
+  menuItems: MenuItem[];
+  /** not set for scenes that can't be opened (trash) */
+  onOpen?: () => void;
+  renaming: boolean;
+  onRename: (title: string) => void;
+  onRenameCancel: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [editValue, setEditValue] = useState(scene.title || "");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const thumbnailUrl = useSceneThumbnail(scene);
+  const [title, setTitle] = useState(scene.title);
 
   useEffect(() => {
-    if (renaming) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [renaming]);
+    setTitle(scene.title);
+  }, [scene.title, renaming]);
 
-  const handleSubmit = async () => {
-    const trimmed = editValue.trim();
+  const submitRename = () => {
+    const trimmed = title.trim();
     if (trimmed && trimmed !== scene.title) {
-      try {
-        await api.renameScene(scene.id, trimmed);
-        onRename(scene.id, trimmed);
-      } catch {
-        setEditValue(scene.title);
-      }
+      onRename(trimmed);
     } else {
-      setEditValue(scene.title);
+      onRenameCancel();
     }
-    setRenaming(false);
   };
 
-  return (
-    <div
-      onClick={() => !renaming && onOpen(scene.id)}
-      style={{
-        borderRadius: "10px",
-        border: "1px solid #e5e7eb",
-        background: "#fff",
-        cursor: renaming ? "default" : "pointer",
-        overflow: "hidden",
-        transition: "box-shadow 0.15s, transform 0.15s",
-        display: "flex",
-        flexDirection: "column",
-      }}
-      onMouseEnter={(e) => {
-        if (!renaming) {
-          e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)";
-          e.currentTarget.style.transform = "translateY(-2px)";
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = "none";
-        e.currentTarget.style.transform = "translateY(0)";
-      }}
-    >
-      {/* Thumbnail placeholder */}
-      <div
-        style={{
-          height: "160px",
-          background:
-            "linear-gradient(135deg, #e0e7ff 0%, #f0e6ff 50%, #fce7f3 100%)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          position: "relative",
-        }}
-      >
-        <svg
-          width="48"
-          height="48"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#a5b4fc"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <path d="M3 9h18" />
-          <path d="M9 21V9" />
-        </svg>
+  const timestamp = scene.deleted_at ?? scene.updated_at;
 
-        {/* 3-dot menu */}
+  return (
+    <div className="group flex flex-col">
+      {/* The menu is a sibling of the clickable area: no button inside a button,
+          and not clipped by the thumbnail's overflow-hidden */}
+      <div className="relative">
         <div
-          style={{ position: "absolute", top: "8px", right: "8px" }}
-          onClick={(e) => e.stopPropagation()}
+          role={onOpen ? "button" : undefined}
+          tabIndex={onOpen ? 0 : undefined}
+          aria-label={onOpen ? `Open ${scene.title}` : undefined}
+          onClick={onOpen}
+          onKeyDown={(event) => event.key === "Enter" && onOpen?.()}
+          className={`relative h-44 overflow-hidden rounded-xl border border-gray-200 transition ${
+            onOpen
+              ? "cursor-pointer hover:border-indigo-200 hover:shadow-lg"
+              : ""
+          } ${
+            thumbnailUrl
+              ? "bg-white"
+              : "bg-gradient-to-br from-indigo-50 via-violet-50 to-pink-50"
+          }`}
         >
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={{
-              width: "28px",
-              height: "28px",
-              borderRadius: "6px",
-              border: "none",
-              background: "rgba(255,255,255,0.8)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "14px",
-              color: "#6b7280",
-              backdropFilter: "blur(4px)",
-            }}
-          >
-            ⋯
-          </button>
-          {menuOpen && (
-            <div
-              style={{
-                position: "absolute",
-                top: "100%",
-                right: 0,
-                marginTop: "4px",
-                background: "#fff",
-                borderRadius: "8px",
-                border: "1px solid #e5e7eb",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-                minWidth: "140px",
-                zIndex: 10,
-                overflow: "hidden",
-              }}
-            >
-              <MenuButton
-                label="Rename"
-                onClick={() => {
-                  setRenaming(true);
-                  setMenuOpen(false);
-                }}
-              />
-              <MenuButton
-                label="Share"
-                onClick={() => {
-                  onShare(scene.id);
-                  setMenuOpen(false);
-                }}
-              />
-              <MenuButton
-                label="Delete"
-                color="#dc2626"
-                hoverBg="#fef2f2"
-                onClick={() => {
-                  onDelete(scene.id);
-                  setMenuOpen(false);
-                }}
-              />
+          {thumbnailUrl ? (
+            <img
+              src={thumbnailUrl}
+              alt=""
+              draggable={false}
+              className="h-full w-full object-contain p-2"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-indigo-200">
+              <DashboardIcon className="h-12 w-12" />
             </div>
           )}
+          <span className="absolute right-2 bottom-2 rounded bg-white/90 px-1.5 py-0.5 text-[11px] text-gray-500">
+            {timeAgo(timestamp)}
+          </span>
         </div>
 
-        {/* Timestamp badge */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: "8px",
-            right: "8px",
-            background: "rgba(0,0,0,0.5)",
-            color: "#fff",
-            padding: "2px 8px",
-            borderRadius: "4px",
-            fontSize: "11px",
-          }}
-        >
-          {formatDate(scene.updated_at)}
+        <div className="absolute top-2 right-2 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100">
+          <DropdownMenu
+            label="Scene actions"
+            triggerClassName="flex h-7 w-7 items-center justify-center rounded-md bg-white/90 text-gray-500 shadow-sm hover:text-gray-900"
+            trigger={<MoreIcon />}
+            items={menuItems}
+          />
         </div>
       </div>
 
-      {/* Info */}
-      <div style={{ padding: "12px 14px" }}>
+      <div className="px-1 pt-2.5">
         {renaming ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSubmit();
+          <input
+            autoFocus
+            value={title}
+            maxLength={255}
+            onChange={(event) => setTitle(event.target.value)}
+            onBlur={submitRename}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                submitRename();
+              } else if (event.key === "Escape") {
+                onRenameCancel();
+              }
             }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input
-              ref={inputRef}
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={handleSubmit}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setEditValue(scene.title);
-                  setRenaming(false);
-                }
-              }}
-              style={{
-                width: "100%",
-                padding: "2px 4px",
-                border: "1px solid #6366f1",
-                borderRadius: "4px",
-                fontSize: "14px",
-                fontWeight: 600,
-                color: "#111827",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </form>
+            className="w-full rounded-md border border-indigo-400 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-100"
+          />
         ) : (
-          <div
-            style={{
-              fontWeight: 600,
-              fontSize: "14px",
-              color: "#111827",
-              marginBottom: "2px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {scene.title || "Untitled"}
-          </div>
+          <p className="truncate text-sm font-medium text-gray-900">
+            {scene.title}
+          </p>
         )}
-        <div style={{ fontSize: "12px", color: "#9ca3af" }}>
-          by {scene.owner_name || "Unknown"}
-        </div>
+        <p className="mt-0.5 truncate text-xs text-gray-500">
+          {scene.deleted_at
+            ? `Deleted by ${scene.deleted_by_name ?? "unknown"}`
+            : `by ${scene.owner_name}`}
+          {scene.is_shared && !scene.deleted_at && " · Shared link"}
+        </p>
       </div>
     </div>
-  );
-}
-
-function MenuButton({
-  label,
-  color = "#374151",
-  hoverBg = "#f3f4f6",
-  onClick,
-}: {
-  label: string;
-  color?: string;
-  hoverBg?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "block",
-        width: "100%",
-        padding: "8px 12px",
-        border: "none",
-        background: "transparent",
-        color,
-        cursor: "pointer",
-        textAlign: "left",
-        fontSize: "13px",
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-    >
-      {label}
-    </button>
   );
 }

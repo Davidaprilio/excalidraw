@@ -32,6 +32,8 @@ import type {
 
 import { FILE_CACHE_MAX_AGE_SEC } from "../app_constants";
 
+import api from "./api";
+
 import { getSyncableElements } from ".";
 
 import type { SyncableExcalidrawElement } from ".";
@@ -102,17 +104,85 @@ const encryptElements = async (
 };
 
 const decryptElements = async (
-  data: FirebaseStoredScene,
+  data: { iv: Uint8Array; ciphertext: Uint8Array },
   roomKey: string,
 ): Promise<readonly ExcalidrawElement[]> => {
-  const ciphertext = data.ciphertext.toUint8Array() as Uint8Array<ArrayBuffer>;
-  const iv = data.iv.toUint8Array() as Uint8Array<ArrayBuffer>;
+  const ciphertext = data.ciphertext as Uint8Array<ArrayBuffer>;
+  const iv = data.iv as Uint8Array<ArrayBuffer>;
 
   const decrypted = await decryptData(iv, ciphertext, roomKey);
   const decodedData = new TextDecoder("utf-8").decode(
     new Uint8Array(decrypted),
   );
   return JSON.parse(decodedData);
+};
+
+const fromFirestoreScene = (scene: FirebaseStoredScene) => ({
+  iv: scene.iv.toUint8Array(),
+  ciphertext: scene.ciphertext.toUint8Array(),
+});
+
+// Self-hosted: rooms and their files are stored by our API instead of Firebase
+// (still end-to-end encrypted with the room key; the server only sees ciphertext)
+// -----------------------------------------------------------------------------
+
+const IS_SELF_HOSTED = import.meta.env.VITE_APP_SELF_HOSTED === "true";
+// save uses "/files/rooms/<id>", load "files/rooms/<id>"
+const COLLAB_FILES_PREFIX_RE = /files\/rooms\/([^/]+)$/;
+const MAX_SAVE_ATTEMPTS = 5;
+
+const toBase64 = (bytes: Uint8Array) => {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+};
+
+const fromBase64 = (base64: string) =>
+  Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+
+const decryptServerRoom = (
+  room: { iv: string; ciphertext: string },
+  roomKey: string,
+) =>
+  decryptElements(
+    { iv: fromBase64(room.iv), ciphertext: fromBase64(room.ciphertext) },
+    roomKey,
+  );
+
+/** Same contract as the Firestore transaction: reconcile with what's stored, retry on conflict. */
+const saveRoomToServer = async (
+  roomId: string,
+  roomKey: string,
+  elements: readonly SyncableExcalidrawElement[],
+  appState: AppState,
+) => {
+  for (let attempt = 0; attempt < MAX_SAVE_ATTEMPTS; attempt++) {
+    const stored = await api.getCollabRoom(roomId);
+    const toStore = stored
+      ? getSyncableElements(
+          reconcileElements(
+            elements,
+            getSyncableElements(
+              restoreElements(await decryptServerRoom(stored, roomKey), null),
+            ) as OrderedExcalidrawElement[] as RemoteExcalidrawElement[],
+            appState,
+          ),
+        )
+      : [...elements];
+    const { ciphertext, iv } = await encryptElements(roomKey, toStore);
+    const res = await api.saveCollabRoom(roomId, {
+      sceneVersion: getSceneVersion(toStore),
+      ciphertext: toBase64(new Uint8Array(ciphertext)),
+      iv: toBase64(iv),
+      baseRevision: stored?.revision ?? null,
+    });
+    if (!res.conflict) {
+      return toStore;
+    }
+  }
+  throw new Error("Too many concurrent saves to this collaboration room");
 };
 
 class FirebaseSceneVersionCache {
@@ -149,6 +219,9 @@ export const saveFilesToFirebase = async ({
   prefix: string;
   files: { id: FileId; buffer: Uint8Array }[];
 }) => {
+  if (IS_SELF_HOSTED) {
+    return saveFilesToServer(prefix, files);
+  }
   const storage = await loadFirebaseStorage();
 
   const erroredFiles: FileId[] = [];
@@ -168,6 +241,33 @@ export const saveFilesToFirebase = async ({
     }),
   );
 
+  return { savedFiles, erroredFiles };
+};
+
+const saveFilesToServer = async (
+  prefix: string,
+  files: { id: FileId; buffer: Uint8Array }[],
+) => {
+  const roomId = prefix.match(COLLAB_FILES_PREFIX_RE)?.[1];
+  const erroredFiles: FileId[] = [];
+  const savedFiles: FileId[] = [];
+  // one request per file keeps each JSON body small
+  await Promise.all(
+    files.map(async ({ id, buffer }) => {
+      try {
+        if (!roomId) {
+          throw new Error(`Unsupported file prefix: ${prefix}`);
+        }
+        const res = await api.saveCollabFiles(roomId, [
+          { id, data: toBase64(buffer) },
+        ]);
+        (res.savedFiles.includes(id) ? savedFiles : erroredFiles).push(id);
+      } catch (error: any) {
+        console.error(error);
+        erroredFiles.push(id);
+      }
+    }),
+  );
   return { savedFiles, erroredFiles };
 };
 
@@ -200,6 +300,17 @@ export const saveToFirebase = async (
     return null;
   }
 
+  if (IS_SELF_HOSTED) {
+    const storedElements = await saveRoomToServer(
+      roomId,
+      roomKey,
+      elements,
+      appState,
+    );
+    FirebaseSceneVersionCache.set(socket, storedElements);
+    return toBrandedType<RemoteExcalidrawElement[]>(storedElements);
+  }
+
   const firestore = _getFirestore();
   const docRef = doc(firestore, "scenes", roomId);
 
@@ -216,7 +327,10 @@ export const saveToFirebase = async (
 
     const prevStoredScene = snapshot.data() as FirebaseStoredScene;
     const prevStoredElements = getSyncableElements(
-      restoreElements(await decryptElements(prevStoredScene, roomKey), null),
+      restoreElements(
+        await decryptElements(fromFirestoreScene(prevStoredScene), roomKey),
+        null,
+      ),
     );
     const reconciledElements = getSyncableElements(
       reconcileElements(
@@ -238,7 +352,10 @@ export const saveToFirebase = async (
   });
 
   const storedElements = getSyncableElements(
-    restoreElements(await decryptElements(storedScene, roomKey), null),
+    restoreElements(
+      await decryptElements(fromFirestoreScene(storedScene), roomKey),
+      null,
+    ),
   );
 
   FirebaseSceneVersionCache.set(socket, storedElements);
@@ -251,6 +368,21 @@ export const loadFromFirebase = async (
   roomKey: string,
   socket: Socket | null,
 ): Promise<readonly SyncableExcalidrawElement[] | null> => {
+  if (IS_SELF_HOSTED) {
+    const stored = await api.getCollabRoom(roomId);
+    if (!stored) {
+      return null;
+    }
+    const elements = getSyncableElements(
+      restoreElements(await decryptServerRoom(stored, roomKey), null, {
+        deleteInvisibleElements: true,
+      }),
+    );
+    if (socket) {
+      FirebaseSceneVersionCache.set(socket, elements);
+    }
+    return elements;
+  }
   const firestore = _getFirestore();
   const docRef = doc(firestore, "scenes", roomId);
   const docSnap = await getDoc(docRef);
@@ -259,9 +391,11 @@ export const loadFromFirebase = async (
   }
   const storedScene = docSnap.data() as FirebaseStoredScene;
   const elements = getSyncableElements(
-    restoreElements(await decryptElements(storedScene, roomKey), null, {
-      deleteInvisibleElements: true,
-    }),
+    restoreElements(
+      await decryptElements(fromFirestoreScene(storedScene), roomKey),
+      null,
+      { deleteInvisibleElements: true },
+    ),
   );
 
   if (socket) {
@@ -269,6 +403,23 @@ export const loadFromFirebase = async (
   }
 
   return elements;
+};
+
+/** Encrypted file bytes from Firebase Storage, or our API when self-hosted */
+const fetchFileBytes = async (
+  prefix: string,
+  id: FileId,
+): Promise<ArrayBuffer | null> => {
+  if (IS_SELF_HOSTED) {
+    const roomId = prefix.match(COLLAB_FILES_PREFIX_RE)?.[1];
+    const bytes = roomId ? await api.getCollabFile(roomId, id) : null;
+    return bytes ? (bytes.buffer as ArrayBuffer) : null;
+  }
+  const url = `https://firebasestorage.googleapis.com/v0/b/${
+    FIREBASE_CONFIG.storageBucket
+  }/o/${encodeURIComponent(prefix.replace(/^\//, ""))}%2F${id}`;
+  const response = await fetch(`${url}?alt=media`);
+  return response.status < 400 ? response.arrayBuffer() : null;
 };
 
 export const loadFilesFromFirebase = async (
@@ -282,13 +433,8 @@ export const loadFilesFromFirebase = async (
   await Promise.all(
     [...new Set(filesIds)].map(async (id) => {
       try {
-        const url = `https://firebasestorage.googleapis.com/v0/b/${
-          FIREBASE_CONFIG.storageBucket
-        }/o/${encodeURIComponent(prefix.replace(/^\//, ""))}%2F${id}`;
-        const response = await fetch(`${url}?alt=media`);
-        if (response.status < 400) {
-          const arrayBuffer = await response.arrayBuffer();
-
+        const arrayBuffer = await fetchFileBytes(prefix, id);
+        if (arrayBuffer) {
           const { data, metadata } = await decompressData<BinaryFileMetadata>(
             new Uint8Array(arrayBuffer),
             {

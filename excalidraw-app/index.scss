@@ -7,6 +7,16 @@
     --color-primary-contrast-offset: #726dff; // to offset Chubb illusion
   }
 
+  // Same size as the share (LiveCollaborationTrigger) button next to it
+  .app-profile-avatar {
+    width: var(--lg-button-size);
+    height: var(--lg-button-size);
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid var(--default-border-color);
+    object-fit: cover;
+  }
+
   .footer-center {
     justify-content: flex-end;
     margin-top: auto;

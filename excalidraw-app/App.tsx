@@ -9,7 +9,10 @@ import {
   useExcalidrawAPI,
 } from "@excalidraw/excalidraw";
 import { trackEvent } from "@excalidraw/excalidraw/analytics";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
+import {
+  clearAppStateForDatabase,
+  getDefaultAppState,
+} from "@excalidraw/excalidraw/appState";
 import {
   CommandPalette,
   DEFAULT_CATEGORIES,
@@ -145,18 +148,25 @@ import { AIComponents } from "./components/AI";
 import { ExcalidrawPlusIframeExport } from "./ExcalidrawPlusIframeExport";
 
 import "./index.scss";
+import "./tailwind.css";
 
-import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";
+// import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";
 import { AppSidebar } from "./components/AppSidebar";
 import { serverData } from "./data/ServerData";
+import api from "./data/api";
+import { setStoredWorkspaceId } from "./data/workspace";
 import { SelfHostedAppWrapper } from "./SelfHostedApp";
 import { Dashboard } from "./components/Dashboard";
+import { SharedSceneViewer } from "./components/SharedSceneViewer";
+import { navigateTo } from "./navigation";
 
 import type { CollabAPI } from "./collab/Collab";
 
 polyfill();
 
 window.EXCALIDRAW_THROTTLE_RENDER = true;
+
+const IS_SELF_HOSTED = import.meta.env.VITE_APP_SELF_HOSTED === "true";
 
 declare global {
   interface BeforeInstallPromptEventChoiceResult {
@@ -229,35 +239,59 @@ const initializeScene = async (opts: {
   const searchParams = new URLSearchParams(window.location.search);
   const id = searchParams.get("id");
 
-  // Self-hosted: load scene from server if we have a scene ID
-  if (import.meta.env.VITE_APP_SELF_HOSTED === "true") {
-    const pathMatch = window.location.pathname.match(/^\/s\/(.+)$/);
-    const urlSceneId = pathMatch ? pathMatch[1] : null;
-    const serverSceneId =
-      urlSceneId || localStorage.getItem("excalidraw-last-scene-id");
-    if (serverSceneId && !id && !window.location.hash.match(/^#(json|room)=/)) {
-      try {
-        const serverScene = await serverData.load(serverSceneId);
-        if (serverScene) {
-          const localDataState = importFromLocalStorage();
-          return {
-            scene: {
-              elements: restoreElements(serverScene.elements, null, {
-                repairBindings: true,
-                deleteInvisibleElements: true,
-              }),
-              appState: restoreAppState(
-                serverScene.appState,
-                localDataState?.appState,
-              ),
-            },
-            isExternalScene: false,
-          };
-        }
-      } catch (err) {
-        console.warn("Failed to load scene from server:", err);
-      }
+  // Self-hosted: the editor is mounted under /s/:sceneId and the server is the
+  // only source of scene content (never localStorage, which holds whatever
+  // scene was open last and would leak into this one)
+  const serverSceneId = IS_SELF_HOSTED
+    ? window.location.pathname.match(/^\/s\/([^/]+)$/)?.[1]
+    : null;
+  if (serverSceneId && !id && !window.location.hash.match(/^#(json|room)=/)) {
+    if (serverSceneId === "new") {
+      const scene = { elements: [], appState: restoreAppState(null, null) };
+      serverData.beginScene(
+        null,
+        scene.elements,
+        scene.appState,
+        (newId) => {
+          // replaceState doesn't fire popstate, so the editor isn't remounted
+          window.history.replaceState({}, "", `/s/${newId}`);
+          api.recordSceneVisit(newId).catch(() => {});
+        },
+        searchParams.get("collection") || undefined,
+      );
+      return { scene, isExternalScene: false };
     }
+
+    const serverScene = await serverData.load(serverSceneId);
+    if (!serverScene) {
+      serverData.endScene();
+      window.alert(
+        "This drawing doesn't exist or you don't have access to it.",
+      );
+      navigateTo("/", { replace: true });
+      return { scene: null, isExternalScene: false };
+    }
+
+    // Browser prefs (tool colors, sidebar...) come from localStorage, but not
+    // UI state of whichever board was open last
+    const localAppState = importFromLocalStorage()?.appState;
+    const scene = {
+      elements: restoreElements(serverScene.elements, null, {
+        repairBindings: true,
+        deleteInvisibleElements: true,
+      }),
+      appState: restoreAppState(
+        clearAppStateForDatabase(serverScene.appState),
+        localAppState && { ...localAppState, openMenu: null },
+      ),
+      // scroll position isn't stored per board, so bring the drawing into view
+      scrollToContent: true,
+    };
+    serverData.beginScene(serverSceneId, scene.elements, scene.appState);
+    // back on the dashboard, show the workspace this scene belongs to
+    setStoredWorkspaceId(serverScene.workspaceId);
+    api.recordSceneVisit(serverSceneId).catch(() => {});
+    return { scene, isExternalScene: false };
   }
   const jsonBackendMatch = window.location.hash.match(
     /^#json=([a-zA-Z0-9_-]+),([a-zA-Z0-9_-]+)$/,
@@ -636,8 +670,13 @@ const ExcalidrawWrapper = () => {
         !document.hidden &&
         ((collabAPI && !collabAPI.isCollaborating()) || isCollabDisabled)
       ) {
-        // don't sync if local state is newer or identical to browser state
-        if (isBrowserStorageStateNewer(STORAGE_KEYS.VERSION_DATA_STATE)) {
+        // don't sync if local state is newer or identical to browser state.
+        // Self-hosted: other tabs may have a different board open, so
+        // importing their localStorage scene would overwrite this board.
+        if (
+          !IS_SELF_HOSTED &&
+          isBrowserStorageStateNewer(STORAGE_KEYS.VERSION_DATA_STATE)
+        ) {
           const localDataState = importFromLocalStorage();
           const username = importUsernameFromLocalStorage();
           setLangCode(getPreferredLanguage());
@@ -724,12 +763,19 @@ const ExcalidrawWrapper = () => {
   useEffect(() => {
     const unloadHandler = (event: BeforeUnloadEvent) => {
       LocalData.flushSave();
+      const hasUnsavedServerChanges =
+        IS_SELF_HOSTED && serverData.hasPendingChanges();
+      if (hasUnsavedServerChanges) {
+        // best effort; the prompt below gives the request time to finish
+        serverData.flush();
+      }
 
       if (
-        excalidrawAPI &&
-        LocalData.fileStorage.shouldPreventUnload(
-          excalidrawAPI.getSceneElements(),
-        )
+        hasUnsavedServerChanges ||
+        (excalidrawAPI &&
+          LocalData.fileStorage.shouldPreventUnload(
+            excalidrawAPI.getSceneElements(),
+          ))
       ) {
         if (import.meta.env.VITE_APP_DISABLE_PREVENT_UNLOAD !== "true") {
           preventUnload(event);
@@ -788,7 +834,7 @@ const ExcalidrawWrapper = () => {
     }
 
     // Server sync (self-hosted mode)
-    if (import.meta.env.VITE_APP_SELF_HOSTED === "true") {
+    if (IS_SELF_HOSTED) {
       serverData.save(Array.from(elements), appState);
     }
 
@@ -1038,12 +1084,16 @@ const ExcalidrawWrapper = () => {
 
           return (
             <div className="excalidraw-ui-top-right">
-              {excalidrawAPI?.getEditorInterface().formFactor === "desktop" && (
+              {/* {excalidrawAPI?.getEditorInterface().formFactor === "desktop" && (
                 <ExcalidrawPlusPromoBanner
                   isSignedIn={isExcalidrawPlusSignedUser}
                 />
-              )}
-
+              )} */}
+              <img
+                src="https://placehold.co/50?text=AB"
+                alt="profile"
+                className="app-profile-avatar"
+              />
               {collabError.message && <CollabError collabError={collabError} />}
               <LiveCollaborationTrigger
                 isCollaborating={isCollaborating}
@@ -1347,9 +1397,7 @@ const ExcalidrawApp = () => {
     return <ExcalidrawPlusIframeExport />;
   }
 
-  const isSelfHosted = import.meta.env.VITE_APP_SELF_HOSTED === "true";
-
-  if (isSelfHosted) {
+  if (IS_SELF_HOSTED) {
     return <SelfHostedRouting />;
   }
 
@@ -1373,25 +1421,35 @@ function SelfHostedRouting() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  const sceneMatch = currentPath.match(/^\/s\/(.+)$/);
-
-  if (!sceneMatch) {
-    return <SelfHostedAppWrapper>{() => <Dashboard />}</SelfHostedAppWrapper>;
+  // Public read-only link, no login required
+  const shareMatch = currentPath.match(/^\/share\/([^/]+)$/);
+  if (shareMatch) {
+    return (
+      <TopErrorBoundary>
+        <SharedSceneViewer token={shareMatch[1]} />
+      </TopErrorBoundary>
+    );
   }
 
-  const sceneKey = sceneMatch[1] || "new";
+  const sceneMatch = currentPath.match(/^\/s\/([^/]+)$/);
+
+  if (!sceneMatch) {
+    return (
+      <SelfHostedAppWrapper>
+        <Dashboard path={currentPath} />
+      </SelfHostedAppWrapper>
+    );
+  }
 
   return (
     <SelfHostedAppWrapper>
-      {() => (
-        <TopErrorBoundary>
-          <Provider store={appJotaiStore}>
-            <ExcalidrawAPIProvider key={sceneKey}>
-              <ExcalidrawWrapper />
-            </ExcalidrawAPIProvider>
-          </Provider>
-        </TopErrorBoundary>
-      )}
+      <TopErrorBoundary>
+        <Provider store={appJotaiStore}>
+          <ExcalidrawAPIProvider key={sceneMatch[1]}>
+            <ExcalidrawWrapper />
+          </ExcalidrawAPIProvider>
+        </Provider>
+      </TopErrorBoundary>
     </SelfHostedAppWrapper>
   );
 }
