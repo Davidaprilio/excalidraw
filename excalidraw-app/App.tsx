@@ -158,6 +158,9 @@ import { setStoredWorkspaceId } from "./data/workspace";
 import { SelfHostedAppWrapper } from "./SelfHostedApp";
 import { Dashboard } from "./components/Dashboard";
 import { SharedSceneViewer } from "./components/SharedSceneViewer";
+import { SceneTitle } from "./components/SceneTitle";
+import { EditorSidebar } from "./components/editor-sidebar/EditorSidebar";
+import { SidebarIcon } from "./components/dashboard/icons";
 import { navigateTo } from "./navigation";
 
 import type { CollabAPI } from "./collab/Collab";
@@ -248,17 +251,14 @@ const initializeScene = async (opts: {
   if (serverSceneId && !id && !window.location.hash.match(/^#(json|room)=/)) {
     if (serverSceneId === "new") {
       const scene = { elements: [], appState: restoreAppState(null, null) };
-      serverData.beginScene(
-        null,
-        scene.elements,
-        scene.appState,
-        (newId) => {
+      serverData.beginScene(null, scene.elements, scene.appState, {
+        onCreated: (newId) => {
           // replaceState doesn't fire popstate, so the editor isn't remounted
           window.history.replaceState({}, "", `/s/${newId}`);
           api.recordSceneVisit(newId).catch(() => {});
         },
-        searchParams.get("collection") || undefined,
-      );
+        collectionId: searchParams.get("collection") || undefined,
+      });
       return { scene, isExternalScene: false };
     }
 
@@ -287,7 +287,11 @@ const initializeScene = async (opts: {
       // scroll position isn't stored per board, so bring the drawing into view
       scrollToContent: true,
     };
-    serverData.beginScene(serverSceneId, scene.elements, scene.appState);
+    serverData.beginScene(serverSceneId, scene.elements, scene.appState, {
+      title: serverScene.title,
+      collectionId: serverScene.collectionId ?? undefined,
+      workspaceId: serverScene.workspaceId,
+    });
     // back on the dashboard, show the workspace this scene belongs to
     setStoredWorkspaceId(serverScene.workspaceId);
     api.recordSceneVisit(serverSceneId).catch(() => {});
@@ -440,8 +444,49 @@ const initializeScene = async (opts: {
   return { scene: null, isExternalScene: false };
 };
 
+const EDITOR_SIDEBAR_KEY = "excalidraw-editor-sidebar-open";
+
+/** Editor sidebar open/closed, remembered per browser */
+const useEditorSidebarOpen = () => {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(EDITOR_SIDEBAR_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const update = useCallback((value: boolean) => {
+    setOpen(value);
+    try {
+      localStorage.setItem(EDITOR_SIDEBAR_KEY, String(value));
+    } catch {
+      // storage unavailable: the choice just isn't remembered
+    }
+  }, []);
+  return [open, update] as const;
+};
+
 const ExcalidrawWrapper = () => {
   const excalidrawAPI = useExcalidrawAPI();
+  // self-hosted: name of the open server scene (null when none is open)
+  const [sceneTitle, setSceneTitle] = useState<string | null>(
+    serverData.getTitle(),
+  );
+  useEffect(
+    () => serverData.subscribe(() => setSceneTitle(serverData.getTitle())),
+    [],
+  );
+  const [isSidebarOpen, setSidebarOpen] = useEditorSidebarOpen();
+  const showToast = useCallback(
+    (message: string) => excalidrawAPI?.setToast({ message, duration: 3000 }),
+    [excalidrawAPI],
+  );
+
+  useEffect(() => {
+    if (sceneTitle !== null) {
+      document.title = `${sceneTitle} | ${APP_NAME}`;
+    }
+  }, [sceneTitle]);
 
   const [errorMessage, setErrorMessage] = useState("");
   const isCollabDisabled = isRunningInIframe();
@@ -1028,9 +1073,15 @@ const ExcalidrawWrapper = () => {
       style={{ height: "100%" }}
       className={clsx("excalidraw-app", {
         "is-collaborating": isCollaborating,
+        "has-editor-sidebar": IS_SELF_HOSTED && isSidebarOpen,
       })}
     >
+      {IS_SELF_HOSTED && isSidebarOpen && sceneTitle !== null && (
+        <EditorSidebar theme={editorTheme} onToast={showToast} />
+      )}
       <Excalidraw
+        // also the default file name for exports
+        name={sceneTitle ?? undefined}
         viewportStatusFrame={viewportStatusFrame}
         userToFollow={userToFollow}
         onChange={onChange}
@@ -1077,6 +1128,28 @@ const ExcalidrawWrapper = () => {
         autoFocus={true}
         theme={editorTheme}
         onThemeChange={setAppTheme}
+        renderTopLeftUI={(isMobile) =>
+          sceneTitle === null || isMobile ? null : (
+            <>
+              <button
+                type="button"
+                className={clsx("app-sidebar-toggle", {
+                  "is-active": isSidebarOpen,
+                })}
+                aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                aria-pressed={isSidebarOpen}
+                title={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                onClick={() => setSidebarOpen(!isSidebarOpen)}
+              >
+                <SidebarIcon />
+              </button>
+              <SceneTitle
+                title={sceneTitle}
+                onRename={(title) => serverData.rename(title)}
+              />
+            </>
+          )
+        }
         renderTopRightUI={(isMobile) => {
           if (isMobile || !collabAPI || isCollabDisabled) {
             return null;

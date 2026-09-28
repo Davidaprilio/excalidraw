@@ -8,6 +8,7 @@ import api from "./api";
 import { getStoredWorkspaceId } from "./workspace";
 
 const SAVE_DEBOUNCE_MS = 2000;
+const DEFAULT_TITLE = "Untitled";
 
 /**
  * The scene a save belongs to. Pending saves keep a reference to their target,
@@ -16,9 +17,19 @@ const SAVE_DEBOUNCE_MS = 2000;
  */
 type SaveTarget = {
   id: string | null;
+  title: string;
   onCreated?: (id: string) => void;
-  /** where a not-yet-created scene goes (default: Private collection of the current workspace) */
+  /** the scene's collection; for a not-yet-created scene, where it will go
+   * (unset: Private collection of the current workspace) */
   collectionId?: string;
+  workspaceId?: string;
+};
+
+export type OpenSceneInfo = {
+  id: string | null;
+  title: string;
+  collectionId: string | null;
+  workspaceId: string | null;
 };
 
 type PendingSave = {
@@ -36,6 +47,7 @@ export class ServerData {
   private saveTimeout: ReturnType<typeof setTimeout> | null = null;
   // Saves run one at a time so a scene is never created twice
   private saveChain: Promise<void> = Promise.resolve();
+  private listeners = new Set<() => void>();
 
   /**
    * Start saving to a scene (`null` = new scene, created on first real edit).
@@ -45,12 +57,74 @@ export class ServerData {
     sceneId: string | null,
     elements: readonly ExcalidrawElement[],
     appState: Partial<AppState>,
-    onCreated?: (id: string) => void,
-    collectionId?: string,
+    opts: {
+      title?: string;
+      onCreated?: (id: string) => void;
+      collectionId?: string;
+      workspaceId?: string;
+    } = {},
   ) {
     this.flush();
-    this.target = { id: sceneId, onCreated, collectionId };
+    this.target = {
+      id: sceneId,
+      title: opts.title || DEFAULT_TITLE,
+      onCreated: opts.onCreated,
+      collectionId: opts.collectionId,
+      workspaceId: opts.workspaceId,
+    };
     this.lastSavedSignature = this.getSignature(elements, appState);
+    this.notify();
+  }
+
+  /** The open scene (null when none), e.g. for the editor sidebar */
+  getSceneInfo(): OpenSceneInfo | null {
+    const target = this.target;
+    return target
+      ? {
+          id: target.id,
+          title: target.title,
+          collectionId: target.collectionId ?? null,
+          workspaceId: target.workspaceId ?? getStoredWorkspaceId(),
+        }
+      : null;
+  }
+
+  /** Called when the open scene changes: opened, created on first save, renamed */
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify() {
+    this.listeners.forEach((listener) => listener());
+  }
+
+  /** Title of the open scene, or null when no server scene is open */
+  getTitle(): string | null {
+    return this.target?.title ?? null;
+  }
+
+  /** Rename the open scene; a scene not created yet gets the title on creation. */
+  async rename(title: string) {
+    const target = this.target;
+    if (!target) {
+      return;
+    }
+    const previous = target.title;
+    target.title = title;
+    // a create may be in flight: wait so the rename hits the created scene
+    await this.saveChain;
+    if (target.id) {
+      try {
+        await api.renameScene(target.id, title);
+      } catch (err) {
+        target.title = previous;
+        throw err;
+      }
+    }
+    this.notify();
   }
 
   /** Stop saving (e.g. leaving the editor or the scene failed to load). */
@@ -121,6 +195,7 @@ export class ServerData {
         appState: res.scene.app_state || {},
         title: res.scene.title,
         workspaceId: res.scene.workspace_id as string,
+        collectionId: res.scene.collection_id as string | null,
       };
     } catch (err) {
       console.error("Server load failed:", err);
@@ -164,6 +239,7 @@ export class ServerData {
         });
       } else {
         const res = await api.createScene({
+          title: target.title,
           elements: elements as any[],
           appState: sanitizedAppState,
           ...(target.collectionId
@@ -171,7 +247,10 @@ export class ServerData {
             : { workspaceId: getStoredWorkspaceId() ?? undefined }),
         });
         target.id = res.scene.id;
+        target.collectionId = res.scene.collection_id;
+        target.workspaceId = res.scene.workspace_id;
         target.onCreated?.(res.scene.id);
+        this.notify();
       }
       if (target === this.target) {
         this.lastSavedSignature = signature;

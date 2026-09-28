@@ -91,3 +91,35 @@ export const LinkIcon = icon(
 export const RestoreIcon = icon(
   <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5" />,
 );
+export const SidebarIcon = icon(
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M9 3v18M16 15l-3-3 3-3" />
+  </>,
+);
+export const ChevronLeftIcon = icon(<path d="m15 18-6-6 6-6" />);
+export const ChevronRightIcon = icon(<path d="m9 18 6-6-6-6" />);
+export const SortIcon = icon(
+  <path d="m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16" />,
+);
+export const PinIcon = icon(
+  <path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />,
+);
+export const ShareIcon = icon(
+  <>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
+  </>,
+);
+export const ImageIcon = icon(
+  <>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+  </>,
+);
+export const MoveIcon = icon(
+  <path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4M14 2v4a2 2 0 0 0 2 2h4M2 15h10M9 18l3-3-3-3" />,
+);

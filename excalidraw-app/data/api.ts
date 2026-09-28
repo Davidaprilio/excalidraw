@@ -48,6 +48,7 @@ export interface SceneSummary {
   thumbnail_version: number | null;
   has_content: boolean;
   can_delete_permanently: boolean;
+  pinned: boolean;
 }
 
 export type SceneListView = "all" | "recent" | "visited" | "trash";
@@ -299,6 +300,12 @@ class ApiClient {
     return this.request<{ scene: any }>(`/scenes/${id}/transfer`, {
       method: "POST",
       body: JSON.stringify({ workspaceId, collectionId }),
+    });
+  }
+
+  async setScenePinned(id: string, pinned: boolean) {
+    return this.request(`/scenes/${id}/pin`, {
+      method: pinned ? "POST" : "DELETE",
     });
   }
 

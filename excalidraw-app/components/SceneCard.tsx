@@ -10,7 +10,7 @@ import type { MenuItem } from "./dashboard/ui";
 import type { SceneSummary } from "../data/api";
 
 /** Object URL of the scene's thumbnail, generating it first if missing or stale. */
-function useSceneThumbnail(scene: SceneSummary): string | null {
+export function useSceneThumbnail(scene: SceneSummary): string | null {
   const [url, setUrl] = useState<string | null>(null);
   const { id, version, thumbnail_version, has_content, deleted_at } = scene;
 

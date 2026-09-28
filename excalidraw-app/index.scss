@@ -7,6 +7,65 @@
     --color-primary-contrast-offset: #726dff; // to offset Chubb illusion
   }
 
+  // Editor sidebar toggle, left of the main menu button
+  .app-sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lg-button-size);
+    height: var(--lg-button-size);
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--border-radius-lg);
+    background-color: var(--island-bg-color);
+    box-shadow: var(--shadow-island);
+    color: var(--icon-fill-color);
+    cursor: pointer;
+
+    svg {
+      width: var(--lg-icon-size);
+      height: var(--lg-icon-size);
+    }
+
+    &:hover {
+      background-color: var(--button-hover-bg);
+    }
+
+    &.is-active {
+      background-color: var(--color-surface-primary-container);
+      color: var(--color-on-primary-container);
+    }
+  }
+
+  // Scene name right of the main menu button (click to rename)
+  .app-scene-title {
+    // renderTopLeftUI renders before the menu button; flex order puts it after
+    order: 1;
+    height: var(--lg-button-size);
+    max-width: 16rem;
+    padding: 0 0.75rem;
+    border: none;
+    border-radius: var(--border-radius-lg);
+    background-color: transparent;
+    overflow: hidden;
+    color: var(--color-on-surface);
+    font-family: var(--ui-font);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: text;
+
+    &:hover {
+      background-color: var(--button-hover-bg);
+    }
+
+    &--editing {
+      width: 16rem;
+      cursor: text;
+    }
+  }
+
   // Same size as the share (LiveCollaborationTrigger) button next to it
   .app-profile-avatar {
     width: var(--lg-button-size);
