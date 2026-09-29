@@ -56,9 +56,12 @@ export function SceneGrid({
   };
 
   const copyShareLink = async (scene: SceneSummary) => {
-    const res = await api.shareScene(scene.id);
+    // an existing link is copied as is (viewers can't create one)
+    const token =
+      (scene.is_shared && scene.share_token) ||
+      (await api.shareScene(scene.id)).scene.share_token;
     await navigator.clipboard
-      .writeText(`${window.location.origin}/share/${res.scene.share_token}`)
+      .writeText(`${window.location.origin}/share/${token}`)
       .catch(() => {});
   };
 
@@ -93,21 +96,50 @@ export function SceneGrid({
               ]
             : []),
         ]
+      : scene.access_level < 2
+      ? // "view" access: nothing that changes the scene
+        [
+          ...(scene.is_shared
+            ? [
+                {
+                  label: "Copy share link",
+                  icon: <LinkIcon />,
+                  onSelect: () =>
+                    run(
+                      () => copyShareLink(scene),
+                      "Read-only link copied to clipboard",
+                    ),
+                },
+              ]
+            : []),
+          {
+            label: "Duplicate",
+            icon: <CopyIcon />,
+            onSelect: () =>
+              run(() => api.duplicateScene(scene.id), "Scene duplicated"),
+          },
+        ]
       : [
           {
             label: "Rename",
             icon: <PencilIcon />,
             onSelect: () => setRenamingId(scene.id),
           },
-          {
-            label: scene.is_shared ? "Copy share link" : "Share read-only link",
-            icon: <LinkIcon />,
-            onSelect: () =>
-              run(
-                () => copyShareLink(scene),
-                "Read-only link copied to clipboard",
-              ),
-          },
+          ...(scene.share_blocked
+            ? []
+            : [
+                {
+                  label: scene.is_shared
+                    ? "Copy share link"
+                    : "Share read-only link",
+                  icon: <LinkIcon />,
+                  onSelect: () =>
+                    run(
+                      () => copyShareLink(scene),
+                      "Read-only link copied to clipboard",
+                    ),
+                },
+              ]),
           ...(scene.is_shared
             ? [
                 {

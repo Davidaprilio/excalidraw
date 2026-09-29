@@ -23,6 +23,8 @@ type SaveTarget = {
    * (unset: Private collection of the current workspace) */
   collectionId?: string;
   workspaceId?: string;
+  /** the user can only view it (collection "view" access): nothing is saved */
+  readOnly?: boolean;
 };
 
 export type OpenSceneInfo = {
@@ -30,6 +32,7 @@ export type OpenSceneInfo = {
   title: string;
   collectionId: string | null;
   workspaceId: string | null;
+  readOnly: boolean;
 };
 
 type PendingSave = {
@@ -62,6 +65,7 @@ export class ServerData {
       onCreated?: (id: string) => void;
       collectionId?: string;
       workspaceId?: string;
+      readOnly?: boolean;
     } = {},
   ) {
     this.flush();
@@ -71,6 +75,7 @@ export class ServerData {
       onCreated: opts.onCreated,
       collectionId: opts.collectionId,
       workspaceId: opts.workspaceId,
+      readOnly: opts.readOnly,
     };
     this.lastSavedSignature = this.getSignature(elements, appState);
     this.notify();
@@ -85,6 +90,7 @@ export class ServerData {
           title: target.title,
           collectionId: target.collectionId ?? null,
           workspaceId: target.workspaceId ?? getStoredWorkspaceId(),
+          readOnly: !!target.readOnly,
         }
       : null;
   }
@@ -137,7 +143,7 @@ export class ServerData {
 
   save(elements: readonly ExcalidrawElement[], appState: Partial<AppState>) {
     const target = this.target;
-    if (!target) {
+    if (!target || target.readOnly) {
       return;
     }
 
@@ -196,6 +202,8 @@ export class ServerData {
         title: res.scene.title,
         workspaceId: res.scene.workspace_id as string,
         collectionId: res.scene.collection_id as string | null,
+        // "view" access on its collection
+        readOnly: (res.scene.access_level ?? 3) < 2,
       };
     } catch (err) {
       console.error("Server load failed:", err);

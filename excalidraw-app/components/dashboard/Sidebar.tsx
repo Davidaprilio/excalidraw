@@ -17,6 +17,7 @@ import {
   PlusIcon,
   SearchIcon,
   SettingsIcon,
+  ShareIcon,
   TrashIcon,
   UsersIcon,
 } from "./icons";
@@ -62,6 +63,9 @@ export function Sidebar({
         </NavItem>
         <NavItem href="/members" path={path} icon={<UsersIcon />}>
           Team members
+        </NavItem>
+        <NavItem href="/shared" path={path} icon={<ShareIcon />}>
+          Shared with me
         </NavItem>
         <NavItem href="/trash" path={path} icon={<TrashIcon />}>
           Trash
@@ -236,16 +240,13 @@ function CollectionItem({
   collection: Collection;
   path: string;
 }) {
-  const { user } = useAuth();
   const { workspace, reloadCollections } = useWorkspace();
   const toast = useToast();
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const href = `/collections/${collection.id}`;
   const active = path === href || path === `${href}/settings`;
-  const canManage =
-    !collection.is_personal &&
-    (collection.owner_id === user?.id || workspace.role === "admin");
+  const canManage = !collection.is_personal && collection.my_role === "manage";
 
   const update = async (action: () => Promise<unknown>, message: string) => {
     try {

@@ -273,3 +273,117 @@
     }
   }
 }
+
+// Invite people to the scene
+.excalidraw .app-users-panel__invite {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.excalidraw .app-users-panel__combo {
+  position: relative;
+
+  input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--up-border);
+    border-radius: 8px;
+    background: var(--island-bg-color);
+    color: var(--up-fg);
+    font: inherit;
+    font-size: 0.8125rem;
+    outline: none;
+
+    &:focus {
+      border-color: var(--up-primary);
+      box-shadow: none;
+    }
+  }
+}
+
+.excalidraw .app-users-panel__options {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 5;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--up-border);
+  border-radius: 8px;
+  background: var(--island-bg-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+
+    &.is-active {
+      background: var(--up-primary-soft);
+    }
+  }
+}
+
+.excalidraw .app-users-panel__avatar.is-small {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.excalidraw .app-users-panel__invite-row {
+  display: flex;
+  gap: 6px;
+
+  .app-users-panel__select {
+    flex: 1;
+  }
+}
+
+.excalidraw .app-users-panel__select {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--up-border);
+  border-radius: 6px;
+  background: var(--island-bg-color);
+  color: var(--up-fg);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.excalidraw .app-users-panel__link-button.is-primary {
+  border-color: transparent;
+  background: var(--up-primary);
+  color: var(--up-on-primary);
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.excalidraw .app-users-panel__guest {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  font-size: 0.625rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.excalidraw.theme--dark .app-users-panel__guest {
+  color: #f3d38a;
+}

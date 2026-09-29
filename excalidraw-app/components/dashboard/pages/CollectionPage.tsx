@@ -1,17 +1,19 @@
-import { useAuth } from "../../../auth/AuthContext";
 import { navigateTo } from "../../../navigation";
 import { FolderIcon, LockIcon, PencilIcon, SettingsIcon } from "../icons";
 import { SceneGrid } from "../SceneGrid";
 import { Button, EmptyState, ErrorBanner, PageHeader } from "../ui";
+import { useCollection } from "../useCollection";
 import { useScenes } from "../useScenes";
-import { useWorkspace } from "../WorkspaceContext";
 
 import { StartDrawingButton } from "./HomePage";
 
 export function CollectionPage({ collectionId }: { collectionId: string }) {
-  const { user } = useAuth();
-  const { workspace, collections, collectionsLoaded } = useWorkspace();
-  const collection = collections.find((c) => c.id === collectionId);
+  const {
+    collection,
+    workspace,
+    guest,
+    loaded: collectionsLoaded,
+  } = useCollection(collectionId);
   const { scenes, error, reload } = useScenes({
     workspaceId: workspace.id,
     collectionId,
@@ -28,9 +30,7 @@ export function CollectionPage({ collectionId }: { collectionId: string }) {
   }
 
   const isPrivate = collection.visibility === "private";
-  const canManage =
-    !collection.is_personal &&
-    (collection.owner_id === user?.id || workspace.role === "admin");
+  const canManage = !collection.is_personal && collection.my_role === "manage";
 
   return (
     <>
@@ -43,13 +43,15 @@ export function CollectionPage({ collectionId }: { collectionId: string }) {
           )
         }
         title={collection.name}
-        subtitle={
+        subtitle={`${
           collection.is_personal
             ? "Your private scenes. Only you can see them."
             : isPrivate
-            ? "Only you can see this collection."
+            ? "Private: only the people added to it can see it."
+            : guest
+            ? `Shared with you from ${workspace.name}.`
             : `Shared with everyone in ${workspace.name}.`
-        }
+        }${collection.my_role === "view" ? " You can view its scenes." : ""}`}
         actions={
           <div className="flex gap-2">
             {canManage && (
@@ -61,7 +63,9 @@ export function CollectionPage({ collectionId }: { collectionId: string }) {
                 <SettingsIcon /> Settings
               </Button>
             )}
-            <StartDrawingButton collectionId={collection.id} />
+            {collection.my_role !== "view" && (
+              <StartDrawingButton collectionId={collection.id} />
+            )}
           </div>
         }
       />
@@ -75,7 +79,11 @@ export function CollectionPage({ collectionId }: { collectionId: string }) {
           icon={<PencilIcon className="h-5 w-5" />}
           title="This collection is empty"
           description="Create a scene here, or move existing scenes in from their menu."
-          action={<StartDrawingButton collectionId={collection.id} />}
+          action={
+            collection.my_role !== "view" ? (
+              <StartDrawingButton collectionId={collection.id} />
+            ) : undefined
+          }
         />
       )}
     </>

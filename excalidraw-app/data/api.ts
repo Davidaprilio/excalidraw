@@ -47,8 +47,65 @@ export interface SceneAccessUser {
   name: string | null;
   email: string;
   avatar_version: string | null;
-  /** owner: the scene's owner; admin: workspace admin; editor: workspace member */
-  access: "owner" | "admin" | "editor";
+  /** owner: the scene's owner; else their level (scene invite, collection, workspace) */
+  access: "owner" | CollectionRole;
+  /** invited to this scene directly, with this role */
+  direct_role: CollectionRole | null;
+  /** not a member of the scene's workspace */
+  guest: boolean;
+}
+
+/** Someone to invite (search result) */
+export interface InvitePerson {
+  id: string;
+  name: string | null;
+  email: string;
+  avatar_version: string | null;
+  /** outside the workspace */
+  guest: boolean;
+}
+
+/** view (read only) < edit < manage (settings, people, sharing) */
+export type CollectionRole = "view" | "edit" | "manage";
+
+export interface CollectionAccessPerson {
+  id: string;
+  name: string | null;
+  email: string;
+  avatar_version: string | null;
+}
+
+export interface CollectionAccess {
+  id: string;
+  visibility: "private" | "workspace";
+  /** what everyone in the workspace gets when visibility is "workspace" */
+  workspace_role: CollectionRole;
+  is_personal: boolean;
+  owner_id: string | null;
+  my_role: CollectionRole | null;
+  owner: CollectionAccessPerson | null;
+  members: (CollectionAccessPerson & {
+    role: CollectionRole;
+    guest: boolean;
+  })[];
+  /** other teams (workspaces) it's shared with */
+  teams: {
+    id: string;
+    name: string;
+    role: CollectionRole;
+    avatar_version: string | null;
+    member_count: number;
+  }[];
+}
+
+/** A collection seen from anywhere (e.g. shared with me from another workspace) */
+export interface CollectionInfo extends Collection {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_avatar_version: string | null;
+  workspace_member_count: number;
+  /** I'm a member of its workspace (else a guest) */
+  in_workspace: boolean;
 }
 
 export interface SceneAccess {
@@ -57,12 +114,17 @@ export interface SceneAccess {
     id: string;
     name: string;
     visibility: "private" | "workspace";
+    is_personal: boolean;
   } | null;
   /** anyone with the share link can view it */
   is_shared: boolean;
   share_token: string | null;
   /** viewers of the link may "Save to..." a copy */
   share_allow_save: boolean;
+  /** my level on the scene: 1 view, 2 edit, 3 manage (can invite) */
+  my_level: number;
+  /** people from other workspaces may be invited */
+  guests_allowed: boolean;
   users: SceneAccessUser[];
 }
 
@@ -109,6 +171,10 @@ export interface Collection {
   owner_id: string | null;
   owner_name?: string;
   scene_count: number;
+  /** what everyone in the workspace gets when visibility is "workspace" */
+  workspace_role: CollectionRole;
+  /** my access to it */
+  my_role: CollectionRole | null;
   /** set while the collection is shared by read-only link */
   share_token: string | null;
   /** viewers of the link may "Save to..." copies */
@@ -144,6 +210,11 @@ export interface SceneSummary {
   has_content: boolean;
   can_delete_permanently: boolean;
   pinned: boolean;
+  /** 1 view (read only), 2 edit, 3 manage */
+  access_level: number;
+  /** in a private collection: can't be shared by link */
+  share_blocked: boolean;
+  share_token: string | null;
 }
 
 export type SceneListView = "all" | "recent" | "visited" | "trash";
@@ -612,6 +683,27 @@ class ApiClient {
     });
   }
 
+  /** People to invite to a scene, by name or email */
+  async scenePeople(sceneId: string, q: string) {
+    return this.request<{ users: InvitePerson[] }>(
+      `/scenes/${sceneId}/people?q=${encodeURIComponent(q)}`,
+    );
+  }
+
+  /** Invite someone to a scene, or change their role */
+  async setSceneMember(sceneId: string, userId: string, role: CollectionRole) {
+    return this.request(`/scenes/${sceneId}/members/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async removeSceneMember(sceneId: string, userId: string) {
+    return this.request(`/scenes/${sceneId}/members/${userId}`, {
+      method: "DELETE",
+    });
+  }
+
   /** Share link options (the link must exist) */
   async setSceneShareAllowSave(id: string, allowSave: boolean) {
     return this.request<{ scene: any }>(`/scenes/${id}/share`, {
@@ -869,7 +961,11 @@ class ApiClient {
   async updateCollection(
     workspaceId: string,
     collectionId: string,
-    data: { name?: string; visibility?: Collection["visibility"] },
+    data: {
+      name?: string;
+      visibility?: Collection["visibility"];
+      workspaceRole?: CollectionRole;
+    },
   ) {
     return this.request(
       `/workspaces/${workspaceId}/collections/${collectionId}`,
@@ -878,6 +974,110 @@ class ApiClient {
   }
 
   /** Its scenes are moved to the trash */
+  /** People to add, by name or email (includes other workspaces when it's public) */
+  async collectionPeople(workspaceId: string, collectionId: string, q: string) {
+    return this.request<{ users: InvitePerson[] }>(
+      `/workspaces/${workspaceId}/collections/${collectionId}/people?q=${encodeURIComponent(
+        q,
+      )}`,
+    );
+  }
+
+  /** Share a public collection with another team (a workspace I belong to) */
+  async setCollectionTeam(
+    workspaceId: string,
+    collectionId: string,
+    teamId: string,
+    role: CollectionRole,
+  ) {
+    return this.request(
+      `/workspaces/${workspaceId}/collections/${collectionId}/teams/${teamId}`,
+      { method: "PUT", body: JSON.stringify({ role }) },
+    );
+  }
+
+  async removeCollectionTeam(
+    workspaceId: string,
+    collectionId: string,
+    teamId: string,
+  ) {
+    return this.request(
+      `/workspaces/${workspaceId}/collections/${collectionId}/teams/${teamId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /** Collections and scenes shared with me from workspaces I'm not in */
+  async sharedWithMe() {
+    return this.request<{
+      collections: CollectionInfo[];
+      scenes: (SceneSummary & { workspace_name: string })[];
+    }>(`/collections/shared-with-me`);
+  }
+
+  async getCollection(collectionId: string) {
+    return this.request<{ collection: CollectionInfo }>(
+      `/collections/${collectionId}`,
+    );
+  }
+
+  async getCollectionAccess(workspaceId: string, collectionId: string) {
+    return this.request<{ access: CollectionAccess }>(
+      `/workspaces/${workspaceId}/collections/${collectionId}/access`,
+    );
+  }
+
+  /** Add a workspace member to the collection, or change their role */
+  async setCollectionMember(
+    workspaceId: string,
+    collectionId: string,
+    userId: string,
+    role: CollectionRole,
+  ) {
+    return this.request(
+      `/workspaces/${workspaceId}/collections/${collectionId}/members/${userId}`,
+      { method: "PUT", body: JSON.stringify({ role }) },
+    );
+  }
+
+  async removeCollectionMember(
+    workspaceId: string,
+    collectionId: string,
+    userId: string,
+  ) {
+    return this.request(
+      `/workspaces/${workspaceId}/collections/${collectionId}/members/${userId}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /** The previous owner keeps "manage" */
+  async transferCollectionOwner(
+    workspaceId: string,
+    collectionId: string,
+    ownerId: string,
+  ) {
+    return this.request(
+      `/workspaces/${workspaceId}/collections/${collectionId}/transfer-owner`,
+      { method: "POST", body: JSON.stringify({ ownerId }) },
+    );
+  }
+
+  /** Move the collection with its scenes to another workspace */
+  async moveCollection(
+    workspaceId: string,
+    collectionId: string,
+    targetWorkspaceId: string,
+  ) {
+    return this.request<{ ok: true; workspaceId: string }>(
+      `/workspaces/${workspaceId}/collections/${collectionId}/move`,
+      {
+        method: "POST",
+        body: JSON.stringify({ workspaceId: targetWorkspaceId }),
+      },
+    );
+  }
+
   /** Read-only link to every scene in the collection */
   async shareCollection(workspaceId: string, collectionId: string) {
     return this.request<{ collection: { id: string; share_token: string } }>(

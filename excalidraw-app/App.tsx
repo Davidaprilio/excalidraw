@@ -307,6 +307,7 @@ const initializeScene = async (opts: {
       title: serverScene.title,
       collectionId: serverScene.collectionId ?? undefined,
       workspaceId: serverScene.workspaceId,
+      readOnly: serverScene.readOnly,
     });
     // back on the dashboard, show the workspace this scene belongs to
     setStoredWorkspaceId(serverScene.workspaceId);
@@ -488,8 +489,16 @@ const ExcalidrawWrapper = () => {
   const [sceneTitle, setSceneTitle] = useState<string | null>(
     serverData.getTitle(),
   );
+  // "view" access on the scene's collection: locked in view mode, never saved
+  const [sceneReadOnly, setSceneReadOnly] = useState(
+    () => !!serverData.getSceneInfo()?.readOnly,
+  );
   useEffect(
-    () => serverData.subscribe(() => setSceneTitle(serverData.getTitle())),
+    () =>
+      serverData.subscribe(() => {
+        setSceneTitle(serverData.getTitle());
+        setSceneReadOnly(!!serverData.getSceneInfo()?.readOnly);
+      }),
     [],
   );
   const [isSidebarOpen, setSidebarOpen] = useEditorSidebarOpen();
@@ -1159,6 +1168,7 @@ const ExcalidrawWrapper = () => {
           isCollaborating={isCollaborating}
           onPointerUpdate={collabAPI?.onPointerUpdate}
           contextMenuItems={IS_SELF_HOSTED ? contextMenuItems : undefined}
+          viewModeEnabled={IS_SELF_HOSTED && sceneReadOnly ? true : undefined}
           UIOptions={{
             canvasActions: {
               toggleTheme: true,

@@ -8,6 +8,7 @@ import { HomePage, newScene } from "./dashboard/pages/HomePage";
 import { InvitePage } from "./dashboard/pages/InvitePage";
 import { MembersPage } from "./dashboard/pages/MembersPage";
 import { SettingsPage } from "./dashboard/pages/SettingsPage";
+import { SharedWithMePage } from "./dashboard/pages/SharedWithMePage";
 import { TrashPage } from "./dashboard/pages/TrashPage";
 import { QuickSearch } from "./dashboard/QuickSearch";
 import { Sidebar } from "./dashboard/Sidebar";
@@ -64,6 +65,8 @@ function Shell({ path }: { path: string }) {
       key={collectionMatch[1]}
       collectionId={collectionMatch[1]}
     />
+  ) : path === "/shared" ? (
+    <SharedWithMePage />
   ) : path === "/trash" ? (
     <TrashPage />
   ) : path === "/members" ? (

@@ -1,4 +1,5 @@
 import {
+  CloseIcon,
   copyIcon,
   LinkIcon,
   usersIcon,
@@ -14,10 +15,18 @@ import { navigateTo } from "../navigation";
 import { tooltip } from "./comments/CommentParts";
 import { useComments } from "./comments/CommentsContext";
 import { Avatar } from "./dashboard/ui";
+import { usePeopleSearch } from "./usePeopleSearch";
 
 import "./SceneUsersPanel.scss";
 
-import type { SceneAccess, SceneAccessUser } from "../data/api";
+import type {
+  CollectionRole,
+  InvitePerson,
+  SceneAccess,
+  SceneAccessUser,
+} from "../data/api";
+
+const ROLES: CollectionRole[] = ["view", "edit", "manage"];
 
 /** window event: the scene's access changed elsewhere (e.g. "Export to link") */
 export const SCENE_ACCESS_CHANGED = "scene-access-changed";
@@ -46,13 +55,17 @@ const ACCESS: Record<
     label: "Owner",
     details: "Created this scene: can edit, share, move and delete it",
   },
-  admin: {
-    label: "Admin",
-    details: "Workspace admin: can edit, share, move and delete it",
+  manage: {
+    label: "Can manage",
+    details: "Can edit, share it and manage its collection's access",
   },
-  editor: {
+  edit: {
     label: "Can edit",
-    details: "Workspace member: can edit, comment and share it",
+    details: "Can edit, comment and share it",
+  },
+  view: {
+    label: "Can view",
+    details: "Can open it read-only and comment",
   },
 };
 
@@ -167,7 +180,39 @@ export function SceneUsersPanel() {
   };
 
   const shared = access.collection?.visibility === "workspace";
-  const owner = access.users.find((user) => user.access === "owner");
+  // a private collection (not someone's own Private one) can't be shared by link
+  const linkAllowed = shared || !!access.collection?.is_personal;
+  // viewers can't change the link; managers invite people
+  const canEdit = access.my_level >= 2;
+  const canManage = access.my_level >= 3;
+  const meGuest = !!access.users.find((u) => u.id === userId)?.guest;
+
+  const run = async (action: () => Promise<unknown>, message: string) => {
+    setBusy(true);
+    try {
+      await action();
+      await reload();
+      notify(message);
+    } catch (err: any) {
+      notify(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setMember = (
+    person: { id: string; name: string | null; email: string },
+    role: CollectionRole | null,
+  ) =>
+    run(
+      () =>
+        role
+          ? api.setSceneMember(sceneId, person.id, role)
+          : api.removeSceneMember(sceneId, person.id),
+      role
+        ? `${person.name || person.email}: ${ACCESS[role].label.toLowerCase()}`
+        : `${person.name || person.email} removed`,
+    );
 
   return (
     <div className="app-users-panel">
@@ -179,16 +224,10 @@ export function SceneUsersPanel() {
           </>
         ) : (
           <>
-            Only{" "}
-            <b>{owner?.id === userId ? "you" : owner?.name || owner?.email}</b>{" "}
-            can open this scene: it's in a private collection
-            {access.collection ? (
-              <>
-                {" "}
-                (<b>{access.collection.name}</b>)
-              </>
-            ) : null}
-            .
+            Only the people below can open this scene: it's in the private
+            collection{" "}
+            {access.collection ? <b>{access.collection.name}</b> : null}.
+            {!linkAllowed && " It can't be shared by link."}
           </>
         )}
       </p>
@@ -216,19 +255,21 @@ export function SceneUsersPanel() {
           >
             {copyIcon}
           </button>
-          <button
-            type="button"
-            className="app-users-panel__action is-danger"
-            aria-label="Stop sharing"
-            disabled={busy}
-            {...tooltip("Stop sharing")}
-            onClick={() => setLinkSharing(false)}
-          >
-            {UnlinkIcon}
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              className="app-users-panel__action is-danger"
+              aria-label="Stop sharing"
+              disabled={busy}
+              {...tooltip("Stop sharing")}
+              onClick={() => setLinkSharing(false)}
+            >
+              {UnlinkIcon}
+            </button>
+          )}
         </div>
       ) : null}
-      {shareLink && (
+      {shareLink && canEdit && (
         <label className="app-users-panel__option">
           <input
             type="checkbox"
@@ -242,7 +283,7 @@ export function SceneUsersPanel() {
           </span>
         </label>
       )}
-      {!shareLink && (
+      {!shareLink && linkAllowed && canEdit && (
         <div className="app-users-panel__row">
           <span className="app-users-panel__icon is-off">{LinkIcon}</span>
           <span className="app-users-panel__who">
@@ -260,6 +301,15 @@ export function SceneUsersPanel() {
         </div>
       )}
 
+      {canManage && (
+        <SceneInviteForm
+          sceneId={sceneId}
+          guestsAllowed={access.guests_allowed}
+          busy={busy}
+          onInvite={(person, role) => setMember(person, role)}
+        />
+      )}
+
       <h3 className="app-users-panel__heading">
         People with access · {access.users.length}
       </h3>
@@ -275,35 +325,218 @@ export function SceneUsersPanel() {
               <b>
                 {user.name || user.email}
                 {user.id === userId && <em> (you)</em>}
+                {user.guest && (
+                  <span
+                    className="app-users-panel__guest"
+                    {...tooltip(
+                      `Not in ${access.workspace.name}: invited to this scene or its collection`,
+                      true,
+                    )}
+                  >
+                    Guest
+                  </span>
+                )}
               </b>
               <small>{user.email}</small>
             </span>
-            <span
-              className={`app-users-panel__badge is-${user.access}`}
-              {...tooltip(ACCESS[user.access].details, true)}
-            >
-              {ACCESS[user.access].label}
-            </span>
+            {canManage && user.direct_role && user.access !== "owner" ? (
+              <>
+                <select
+                  className="app-users-panel__select"
+                  aria-label={`Role of ${user.name || user.email}`}
+                  value={user.direct_role}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setMember(user, event.target.value as CollectionRole)
+                  }
+                >
+                  {ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {ACCESS[role].label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="app-users-panel__action is-danger"
+                  aria-label={`Remove ${user.name || user.email}`}
+                  disabled={busy}
+                  {...tooltip("Remove from this scene")}
+                  onClick={() => setMember(user, null)}
+                >
+                  {CloseIcon}
+                </button>
+              </>
+            ) : (
+              <span
+                className={`app-users-panel__badge is-${user.access}`}
+                {...tooltip(ACCESS[user.access].details, true)}
+              >
+                {ACCESS[user.access].label}
+              </span>
+            )}
           </li>
         ))}
       </ul>
 
-      <div className="app-users-panel__footer">
-        <p>Change access or remove people from the dashboard.</p>
-        <button type="button" onClick={() => openDashboard("/members")}>
-          {usersIcon}
-          Manage members
-        </button>
-        {access.collection && (
-          <button
-            type="button"
-            onClick={() =>
-              openDashboard(`/collections/${access.collection!.id}`)
-            }
-          >
-            Open collection
+      {!meGuest && (
+        <div className="app-users-panel__footer">
+          <p>Collection and workspace access are managed from the dashboard.</p>
+          <button type="button" onClick={() => openDashboard("/members")}>
+            {usersIcon}
+            Manage members
           </button>
+          {access.collection && (
+            <button
+              type="button"
+              onClick={() =>
+                openDashboard(`/collections/${access.collection!.id}`)
+              }
+            >
+              Open collection
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Invite someone to this scene: search by name or email, pick a role */
+function SceneInviteForm({
+  sceneId,
+  guestsAllowed,
+  busy,
+  onInvite,
+}: {
+  sceneId: string;
+  guestsAllowed: boolean;
+  busy: boolean;
+  onInvite: (person: InvitePerson, role: CollectionRole) => Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<InvitePerson | null>(null);
+  const [role, setRole] = useState<CollectionRole>("edit");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const people = usePeopleSearch(
+    query,
+    (q) => api.scenePeople(sceneId, q),
+    !picked,
+  );
+  const showList = open && !picked && people.length > 0;
+
+  const pick = (person: InvitePerson) => {
+    setPicked(person);
+    setQuery(person.name || person.email);
+    setOpen(false);
+  };
+
+  return (
+    <div className="app-users-panel__invite">
+      <div className="app-users-panel__combo">
+        <input
+          value={query}
+          role="combobox"
+          aria-label="Invite people"
+          aria-expanded={showList}
+          aria-controls="scene-invite-options"
+          autoComplete="off"
+          placeholder={
+            guestsAllowed
+              ? "Invite people by name or email"
+              : "Invite people from this workspace"
+          }
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setPicked(null);
+            setOpen(true);
+            setActive(0);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onKeyDown={(event) => {
+            // the canvas mustn't see these keys
+            event.stopPropagation();
+            if (!showList) {
+              return;
+            }
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              const step = event.key === "ArrowDown" ? 1 : -1;
+              setActive((active + step + people.length) % people.length);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              pick(people[active]);
+            } else if (event.key === "Escape") {
+              setOpen(false);
+            }
+          }}
+        />
+        {showList && (
+          <ul
+            id="scene-invite-options"
+            role="listbox"
+            className="app-users-panel__options"
+          >
+            {people.map((person, index) => (
+              <li
+                key={person.id}
+                role="option"
+                aria-selected={index === active}
+                className={index === active ? "is-active" : undefined}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  pick(person);
+                }}
+                onMouseEnter={() => setActive(index)}
+              >
+                <Avatar
+                  name={person.name || person.email}
+                  size="app-users-panel__avatar is-small"
+                  src={api.avatarUrl(person.id, person.avatar_version)}
+                />
+                <span className="app-users-panel__who">
+                  <b>
+                    {person.name || person.email}
+                    {person.guest && (
+                      <span className="app-users-panel__guest">Guest</span>
+                    )}
+                  </b>
+                  <small>{person.email}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
+      </div>
+      <div className="app-users-panel__invite-row">
+        <select
+          className="app-users-panel__select"
+          aria-label="Role for the invite"
+          value={role}
+          onChange={(event) => setRole(event.target.value as CollectionRole)}
+        >
+          {ROLES.map((value) => (
+            <option key={value} value={value}>
+              {ACCESS[value].label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="app-users-panel__link-button is-primary"
+          disabled={busy || !picked}
+          onClick={async () => {
+            if (picked) {
+              await onInvite(picked, role);
+              setPicked(null);
+              setQuery("");
+            }
+          }}
+        >
+          Invite
+        </button>
       </div>
     </div>
   );
