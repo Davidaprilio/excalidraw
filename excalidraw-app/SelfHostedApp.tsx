@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { AuthLayout } from "./auth/AuthLayout";
 import { LoginPage } from "./auth/LoginPage";
 import { RegisterPage } from "./auth/RegisterPage";
 
@@ -20,18 +21,9 @@ function AuthGate({ children }: { children: ReactNode }) {
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "100vh",
-          background: "var(--bg-primary, #1e1e1e)",
-          color: "var(--text-primary, #fff)",
-        }}
-      >
-        Loading...
-      </div>
+      <AuthLayout>
+        <p className="text-center text-sm text-gray-500">Loading...</p>
+      </AuthLayout>
     );
   }
 
