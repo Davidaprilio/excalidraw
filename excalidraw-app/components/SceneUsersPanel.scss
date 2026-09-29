@@ -104,6 +104,62 @@
   }
 }
 
+.excalidraw .app-users-panel__icon.is-off {
+  background: var(--up-soft);
+  color: var(--up-muted);
+}
+
+.excalidraw .app-users-panel__action {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--up-muted);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--button-hover-bg);
+    color: var(--up-fg);
+  }
+
+  &.is-danger:hover:not(:disabled) {
+    color: var(--color-danger-text, #db3a3a);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.excalidraw .app-users-panel__link-button {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--up-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--up-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--button-hover-bg);
+  }
+}
+
 .excalidraw .app-users-panel__who {
   display: flex;
   flex: 1;

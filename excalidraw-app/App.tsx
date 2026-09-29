@@ -154,6 +154,7 @@ import "./tailwind.css";
 import { AppSidebar } from "./components/AppSidebar";
 import { serverData } from "./data/ServerData";
 import api from "./data/api";
+import { SCENE_ACCESS_CHANGED } from "./components/SceneUsersPanel";
 import { setStoredWorkspaceId } from "./data/workspace";
 import { SelfHostedAppWrapper } from "./SelfHostedApp";
 import { Dashboard } from "./components/Dashboard";
@@ -942,6 +943,21 @@ const ExcalidrawWrapper = () => {
     if (exportedElements.length === 0) {
       throw new Error(t("alerts.cannotExportEmptyCanvas"));
     }
+    // Self-hosted: the scene's read-only link on our server (as in the
+    // dashboard), instead of uploading a copy to excalidraw.com's backend
+    if (IS_SELF_HOSTED) {
+      await serverData.flush();
+      const sceneId = serverData.getSceneInfo()?.id;
+      if (!sceneId) {
+        throw new Error(t("alerts.couldNotCreateShareableLink"));
+      }
+      const res = await api.shareScene(sceneId);
+      window.dispatchEvent(new Event(SCENE_ACCESS_CHANGED));
+      setLatestShareableLink(
+        `${window.location.origin}/share/${res.scene.share_token}`,
+      );
+      return;
+    }
     try {
       const { url, errorMessage } = await exportToBackend(
         exportedElements,
@@ -1290,6 +1306,11 @@ const ExcalidrawWrapper = () => {
           {latestShareableLink && (
             <ShareableLinkDialog
               link={latestShareableLink}
+              description={
+                IS_SELF_HOSTED
+                  ? "🔗 Anyone with this link can view the scene (read only), including later changes. Stop it anytime from the Users tab in the sidebar."
+                  : undefined
+              }
               onCloseRequest={() => setLatestShareableLink(null)}
               setErrorMessage={setErrorMessage}
             />

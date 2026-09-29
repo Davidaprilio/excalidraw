@@ -60,6 +60,7 @@ export interface SceneAccess {
   } | null;
   /** anyone with the share link can view it */
   is_shared: boolean;
+  share_token: string | null;
   users: SceneAccessUser[];
 }
 

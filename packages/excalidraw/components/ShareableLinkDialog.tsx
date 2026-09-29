@@ -13,6 +13,8 @@ import "./ShareableLinkDialog.scss";
 
 export type ShareableLinkDialogProps = {
   link: string;
+  /** replaces the end-to-end encryption note (e.g. for a server-side link) */
+  description?: React.ReactNode;
 
   onCloseRequest: () => void;
   setErrorMessage: (error: string) => void;
@@ -20,6 +22,7 @@ export type ShareableLinkDialogProps = {
 
 export const ShareableLinkDialog = ({
   link,
+  description,
   onCloseRequest,
   setErrorMessage,
 }: ShareableLinkDialogProps) => {
@@ -72,7 +75,7 @@ export const ShareableLinkDialog = ({
           />
         </div>
         <div className="ShareableLinkDialog__description">
-          🔒 {t("alerts.uploadedSecurly")}
+          {description ?? <>🔒 {t("alerts.uploadedSecurly")}</>}
         </div>
       </div>
     </Dialog>
