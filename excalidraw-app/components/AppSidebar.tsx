@@ -2,11 +2,13 @@ import { DefaultSidebar, Sidebar, THEME } from "@excalidraw/excalidraw";
 import {
   messageCircleIcon,
   presentationIcon,
+  usersIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { LinkButton } from "@excalidraw/excalidraw/components/LinkButton";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
 
 import { CommentsPanel } from "./comments/CommentsPanel";
+import { SceneUsersPanel } from "./SceneUsersPanel";
 
 import "./AppSidebar.scss";
 
@@ -86,12 +88,19 @@ export const AppSidebar = () => {
         >
           {messageCircleIcon}
         </Sidebar.TabTrigger>
-        <Sidebar.TabTrigger
-          tab="presentation"
-          style={{ opacity: openSidebar?.tab === "presentation" ? 1 : 0.4 }}
-        >
-          {presentationIcon}
-        </Sidebar.TabTrigger>
+        {IS_SELF_HOSTED ? (
+          // self-hosted: who can open the scene instead of the presentation promo
+          <Sidebar.TabTrigger tab="users" aria-label="Users">
+            {usersIcon}
+          </Sidebar.TabTrigger>
+        ) : (
+          <Sidebar.TabTrigger
+            tab="presentation"
+            style={{ opacity: openSidebar?.tab === "presentation" ? 1 : 0.4 }}
+          >
+            {presentationIcon}
+          </Sidebar.TabTrigger>
+        )}
       </DefaultSidebar.TabTriggers>
       <Sidebar.Tab tab="comments">
         {IS_SELF_HOSTED ? (
@@ -118,27 +127,33 @@ export const AppSidebar = () => {
           </div>
         )}
       </Sidebar.Tab>
-      <Sidebar.Tab tab="presentation" className="px-3">
-        <div className="app-sidebar-promo-container">
-          <div
-            className="app-sidebar-promo-image"
-            style={{
-              ["--image-source" as any]: `url(/sidebar-presentation-promo-${
-                theme === THEME.DARK ? "dark" : "light"
-              }.jpg)`,
-              opacity: 0.7,
-            }}
-          />
-          <SidebarPromoCopy text="Create presentation with Excalidraw+" />
-          <LinkButton
-            href={`${
-              import.meta.env.VITE_APP_PLUS_LP
-            }/plus?utm_source=excalidraw&utm_medium=app&utm_content=presentations_promo#excalidraw-redirect`}
-          >
-            Sign up now
-          </LinkButton>
-        </div>
-      </Sidebar.Tab>
+      {IS_SELF_HOSTED ? (
+        <Sidebar.Tab tab="users">
+          <SceneUsersPanel />
+        </Sidebar.Tab>
+      ) : (
+        <Sidebar.Tab tab="presentation" className="px-3">
+          <div className="app-sidebar-promo-container">
+            <div
+              className="app-sidebar-promo-image"
+              style={{
+                ["--image-source" as any]: `url(/sidebar-presentation-promo-${
+                  theme === THEME.DARK ? "dark" : "light"
+                }.jpg)`,
+                opacity: 0.7,
+              }}
+            />
+            <SidebarPromoCopy text="Create presentation with Excalidraw+" />
+            <LinkButton
+              href={`${
+                import.meta.env.VITE_APP_PLUS_LP
+              }/plus?utm_source=excalidraw&utm_medium=app&utm_content=presentations_promo#excalidraw-redirect`}
+            >
+              Sign up now
+            </LinkButton>
+          </div>
+        </Sidebar.Tab>
+      )}
     </DefaultSidebar>
   );
 };

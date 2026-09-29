@@ -42,6 +42,27 @@ export interface CommentThread {
   comments: SceneComment[];
 }
 
+export interface SceneAccessUser {
+  id: string;
+  name: string | null;
+  email: string;
+  avatar_version: string | null;
+  /** owner: the scene's owner; admin: workspace admin; editor: workspace member */
+  access: "owner" | "admin" | "editor";
+}
+
+export interface SceneAccess {
+  workspace: { id: string; name: string };
+  collection: {
+    id: string;
+    name: string;
+    visibility: "private" | "workspace";
+  } | null;
+  /** anyone with the share link can view it */
+  is_shared: boolean;
+  users: SceneAccessUser[];
+}
+
 export interface SecurityOverview {
   totp: {
     enabled: boolean;
@@ -466,6 +487,11 @@ class ApiClient {
 
   async getScene(id: string) {
     return this.request<{ scene: any }>(`/scenes/${id}`);
+  }
+
+  /** who can open the scene and why (read only; managed from the dashboard) */
+  async getSceneAccess(id: string) {
+    return this.request<{ access: SceneAccess }>(`/scenes/${id}/access`);
   }
 
   async updateScene(
