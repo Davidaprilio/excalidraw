@@ -241,3 +241,16 @@
     transition: opacity 0.15s ease, visibility 0.15s;
   }
 }
+
+// Disabled menu items of the viewer (e.g. "Save to..." when the sharer doesn't
+// allow it): keep hover so the not-allowed cursor and the reason show
+.shared-viewer .excalidraw .dropdown-menu-item[disabled] {
+  pointer-events: auto;
+  cursor: not-allowed;
+
+  &:hover,
+  &:focus-visible,
+  &[data-highlighted] {
+    background-color: transparent;
+  }
+}
