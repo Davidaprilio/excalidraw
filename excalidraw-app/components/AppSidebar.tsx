@@ -6,7 +6,11 @@ import {
 import { LinkButton } from "@excalidraw/excalidraw/components/LinkButton";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
 
+import { CommentsPanel } from "./comments/CommentsPanel";
+
 import "./AppSidebar.scss";
+
+const IS_SELF_HOSTED = import.meta.env.VITE_APP_SELF_HOSTED === "true";
 
 type SidebarPromoCopyProps = {
   text: string;
@@ -85,25 +89,29 @@ export const AppSidebar = () => {
         </Sidebar.TabTrigger>
       </DefaultSidebar.TabTriggers>
       <Sidebar.Tab tab="comments">
-        <div className="app-sidebar-promo-container">
-          <div
-            className="app-sidebar-promo-image"
-            style={{
-              ["--image-source" as any]: `url(/sidebar-comments-promo-${
-                theme === THEME.DARK ? "dark" : "light"
-              }.jpg)`,
-              opacity: 0.9,
-            }}
-          />
-          <SidebarPromoCopy text="Make comments with Excalidraw+" />
-          <LinkButton
-            href={`${
-              import.meta.env.VITE_APP_PLUS_LP
-            }/plus?utm_source=excalidraw&utm_medium=app&utm_content=comments_promo#excalidraw-redirect`}
-          >
-            Sign up now
-          </LinkButton>
-        </div>
+        {IS_SELF_HOSTED ? (
+          <CommentsPanel />
+        ) : (
+          <div className="app-sidebar-promo-container">
+            <div
+              className="app-sidebar-promo-image"
+              style={{
+                ["--image-source" as any]: `url(/sidebar-comments-promo-${
+                  theme === THEME.DARK ? "dark" : "light"
+                }.jpg)`,
+                opacity: 0.9,
+              }}
+            />
+            <SidebarPromoCopy text="Make comments with Excalidraw+" />
+            <LinkButton
+              href={`${
+                import.meta.env.VITE_APP_PLUS_LP
+              }/plus?utm_source=excalidraw&utm_medium=app&utm_content=comments_promo#excalidraw-redirect`}
+            >
+              Sign up now
+            </LinkButton>
+          </div>
+        )}
       </Sidebar.Tab>
       <Sidebar.Tab tab="presentation" className="px-3">
         <div className="app-sidebar-promo-container">

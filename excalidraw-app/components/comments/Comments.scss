@@ -1,0 +1,735 @@
+// Comment UI. Shared pieces (.app-cm-*) read --cm-* variables: the canvas
+// overlay (outside .excalidraw) defines its own light/dark palette, the
+// sidebar panel maps them to Excalidraw's theme variables.
+
+.app-comments-overlay {
+  --cm-bg: #ffffff;
+  --cm-fg: #1b1b1f;
+  --cm-muted: #6b6b75;
+  --cm-border: #e4e4ec;
+  --cm-hover: #f1f0ff;
+  --cm-input: #f5f5f8;
+  --cm-primary: #6965db;
+  --cm-primary-fg: #ffffff;
+  --cm-primary-soft: #e0dfff;
+  --cm-danger: #db3a3a;
+  --cm-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+  --cm-scrollbar: rgba(27, 27, 31, 0.18);
+  --cm-scrollbar-hover: rgba(27, 27, 31, 0.32);
+
+  &.theme--dark {
+    --cm-bg: #232329;
+    --cm-fg: #e3e3e8;
+    --cm-muted: #a1a1ab;
+    --cm-border: #37373f;
+    --cm-hover: #2e2d39;
+    --cm-input: #2a2a31;
+    --cm-primary: #a8a5ff;
+    --cm-primary-fg: #1b1b1f;
+    --cm-primary-soft: #3b3a64;
+    --cm-danger: #ff8383;
+    --cm-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+    --cm-scrollbar: rgba(227, 227, 232, 0.2);
+    --cm-scrollbar-hover: rgba(227, 227, 232, 0.36);
+  }
+
+  // above the canvas, below Excalidraw's toolbars and sidebars
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+
+  // the open thread / new comment popups go above Excalidraw's UI
+  &--popups {
+    z-index: 10;
+  }
+  pointer-events: none;
+  color: var(--cm-fg);
+  font-family: var(--ui-font, "Assistant", system-ui, sans-serif);
+  font-size: 14px;
+}
+
+.excalidraw .app-comments-panel {
+  --cm-bg: var(--island-bg-color);
+  --cm-fg: var(--color-on-surface);
+  --cm-muted: var(--color-muted-darker, #6b6b75);
+  --cm-border: var(--default-border-color);
+  --cm-hover: var(--button-hover-bg);
+  --cm-input: var(--color-surface-low);
+  --cm-primary: var(--color-primary);
+  --cm-primary-fg: var(--color-surface-lowest);
+  --cm-primary-soft: var(--color-surface-primary-container);
+  --cm-danger: var(--color-danger-text, #db3a3a);
+  --cm-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  --cm-scrollbar: rgba(27, 27, 31, 0.18);
+  --cm-scrollbar-hover: rgba(27, 27, 31, 0.32);
+}
+
+// surface-low is the sidebar's own color in dark mode: make inputs visible
+.excalidraw.theme--dark .app-comments-panel {
+  --cm-input: #2a2a31;
+  --cm-scrollbar: rgba(227, 227, 232, 0.2);
+  --cm-scrollbar-hover: rgba(227, 227, 232, 0.36);
+}
+
+// Thin, theme-colored scrollbars on everything that scrolls in the comment UI
+.app-cm-card__comments,
+.app-cm-composer textarea,
+.excalidraw .app-comments-panel__list {
+  // Firefox, Chrome 121+
+  scrollbar-width: thin;
+  scrollbar-color: var(--cm-scrollbar) transparent;
+
+  &:hover {
+    scrollbar-color: var(--cm-scrollbar-hover) transparent;
+  }
+
+  // Safari, older Chrome
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 8px;
+    background: var(--cm-scrollbar) padding-box;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--cm-scrollbar-hover) padding-box;
+  }
+}
+
+// ---- Pins: speech bubble whose tip (bottom-left) is the commented point ----
+
+.app-comment-pin {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 3px;
+  box-sizing: border-box;
+  transform: translate(0, -100%);
+  transform-origin: bottom left;
+  border: 2px solid var(--cm-bg);
+  border-radius: 50% 50% 50% 0;
+  background: var(--cm-primary);
+  box-shadow: var(--cm-shadow);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 120ms ease;
+
+  &:hover,
+  &.is-selected {
+    transform: translate(0, -100%) scale(1.12);
+  }
+
+  &.is-selected {
+    outline: 2px solid var(--cm-primary);
+    outline-offset: 2px;
+  }
+
+  &.is-resolved {
+    opacity: 0.55;
+  }
+
+  &.is-draft {
+    pointer-events: none;
+  }
+}
+
+.app-comment-pin__avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.app-comment-pin__count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--cm-fg);
+  color: var(--cm-bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+// "Add comment" mode: the cursor becomes a comment bubble (tip = hotspot)
+.app-comments-placing {
+  position: fixed;
+  cursor: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M3 25 V13 A10 10 0 1 1 13 23 H5 Z' fill='%236965db' stroke='white' stroke-width='2'/%3E%3Cpath d='M9 12h8M9 16h5' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")
+      3 25,
+    crosshair;
+  pointer-events: auto;
+}
+
+// "Click anywhere to comment" hint: its own fixed element above Excalidraw's
+// toolbars (the overlay's z-index 3 would keep it underneath)
+.app-comments-hint {
+  position: fixed;
+  z-index: 10;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #1b1b1f;
+  color: #ffffff;
+  font-family: var(--ui-font, "Assistant", system-ui, sans-serif);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+
+  &.theme--dark {
+    background: #e3e3e8;
+    color: #1b1b1f;
+  }
+}
+
+// ---- Popup card (new comment / open thread) ----
+
+.app-cm-card {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-height: min(70vh, 560px);
+  box-sizing: border-box;
+  border: 1px solid var(--cm-border);
+  border-radius: 12px;
+  background: var(--cm-bg);
+  box-shadow: var(--cm-shadow);
+  pointer-events: auto;
+
+  &--draft {
+    padding: 10px;
+  }
+}
+
+.app-cm-card__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cm-border);
+}
+
+.app-cm-card__note {
+  margin: 8px 14px 0;
+  color: var(--cm-muted);
+  font-size: 12px;
+}
+
+.app-cm-card__comments {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 14px;
+}
+
+.app-cm-card__reply {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--cm-border);
+}
+
+// ---- Shared bits ----
+
+.app-cm-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cm-fg);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--cm-hover);
+  }
+
+  &.is-active {
+    color: var(--cm-primary);
+  }
+}
+
+.app-cm-text-button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cm-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--cm-hover);
+  }
+}
+
+.app-cm-avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+
+.app-cm-avatar--ring {
+  width: 28px;
+  height: 28px;
+  box-shadow: 0 0 0 2px var(--cm-bg), 0 0 0 3px var(--cm-primary);
+}
+
+.app-cm-error {
+  margin: 6px 2px 0;
+  color: var(--cm-danger);
+  font-size: 12px;
+}
+
+// Composer: textarea + [emoji ... send]
+.app-cm-composer {
+  border: 1px solid var(--cm-border);
+  border-radius: 10px;
+  background: var(--cm-input);
+
+  &:focus-within {
+    border-color: var(--cm-primary);
+  }
+
+  textarea {
+    display: block;
+    width: 100%;
+    min-height: 40px;
+    max-height: 180px;
+    padding: 10px 12px 4px;
+    box-sizing: border-box;
+    resize: none;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: var(--cm-fg);
+    font: inherit;
+    font-size: 14px;
+  }
+}
+
+.app-cm-composer__bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 6px;
+}
+
+.app-cm-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-start: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: var(--cm-primary);
+  color: var(--cm-primary-fg);
+  cursor: pointer;
+
+  &:disabled {
+    background: transparent;
+    color: var(--cm-muted);
+    cursor: default;
+  }
+}
+
+// Emoji picker
+.app-cm-emoji {
+  position: relative;
+}
+
+.app-cm-emoji__grid {
+  position: fixed; // top/left set inline (escapes the scrolling list)
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(8, 30px);
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--cm-border);
+  border-radius: 10px;
+  background: var(--cm-bg);
+  box-shadow: var(--cm-shadow);
+
+  button {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 17px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--cm-hover);
+    }
+  }
+}
+
+// ⋮ menus
+.app-cm-menu {
+  position: relative;
+}
+
+.app-cm-menu__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 150px;
+
+  // ⋮ menus (MiniMenu) are placed inline with position: fixed
+  &[style] {
+    position: fixed;
+    right: auto;
+    width: 160px;
+    box-sizing: border-box;
+  }
+  padding: 4px;
+  border: 1px solid var(--cm-border);
+  border-radius: 10px;
+  background: var(--cm-bg);
+  box-shadow: var(--cm-shadow);
+
+  &.is-left {
+    right: auto;
+    left: 0;
+  }
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--cm-fg);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--cm-hover);
+    }
+
+    &.is-danger {
+      color: var(--cm-danger);
+    }
+  }
+}
+
+.app-cm-menu__check {
+  width: 14px;
+  color: var(--cm-primary);
+}
+
+// One comment
+.app-cm-comment {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--cm-border);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  .app-cm-composer {
+    margin-top: 6px;
+  }
+}
+
+.app-cm-comment__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  .app-cm-menu {
+    margin-inline-start: auto;
+  }
+}
+
+.app-cm-comment__author {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-cm-comment__time {
+  flex-shrink: 0;
+  color: var(--cm-muted);
+  font-size: 12px;
+}
+
+.app-cm-comment__body {
+  margin: 8px 0 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-cm-link {
+  color: var(--cm-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+.app-cm-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+
+  .app-cm-icon-button {
+    width: 26px;
+    height: 26px;
+    color: var(--cm-muted);
+  }
+}
+
+.app-cm-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--cm-border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cm-fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &.is-mine {
+    border-color: var(--cm-primary);
+    background: var(--cm-primary-soft);
+  }
+}
+
+// ---- Sidebar panel ----
+
+// let the thread list, not the whole sidebar, scroll: the tab chain above
+// the panel is flex with min-height: auto, so it would grow past the sidebar
+.excalidraw .default-sidebar .sidebar-tabs-root:has(.app-comments-panel),
+.excalidraw .default-sidebar .sidebar-tabs-root > :has(> .app-comments-panel) {
+  min-height: 0;
+}
+
+.excalidraw .app-comments-panel__list {
+  min-height: 0;
+}
+
+.excalidraw .app-comments-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  color: var(--cm-fg);
+  font-size: 0.875rem;
+}
+
+.excalidraw .app-comments-panel__search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0.75rem 0.75rem 0;
+  padding: 0 12px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--cm-input);
+  color: var(--cm-muted);
+
+  &:focus-within {
+    outline: 1px solid var(--cm-primary);
+  }
+
+  // the wrapper shows the focus ring; drop Excalidraw's input focus shadow
+  input,
+  input:focus {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+    color: var(--cm-fg);
+    font: inherit;
+  }
+}
+
+.excalidraw .app-comments-panel__tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0.75rem;
+  border-bottom: 1px solid var(--cm-border);
+}
+
+.excalidraw .app-comments-panel__filter-label {
+  color: var(--cm-muted);
+  font-size: 0.8rem;
+}
+
+.excalidraw .app-comments-panel__list {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.excalidraw .app-cm-item {
+  padding: 12px 0.75rem;
+  border-bottom: 1px solid var(--cm-border);
+
+  &.is-selected {
+    background: var(--cm-hover);
+  }
+
+  &.is-resolved .app-cm-item__main {
+    opacity: 0.65;
+  }
+}
+
+.excalidraw .app-cm-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.excalidraw .app-cm-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.excalidraw .app-cm-item__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.excalidraw .app-cm-item__meta {
+  color: var(--cm-muted);
+  font-size: 0.8rem;
+
+  b {
+    color: var(--cm-fg);
+    font-size: 0.875rem;
+  }
+}
+
+.excalidraw .app-cm-item__body {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.excalidraw .app-cm-item__replies {
+  color: var(--cm-muted);
+  font-size: 0.8rem;
+}
+
+.excalidraw .app-comments-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4rem;
+  padding: 0 1.25rem;
+  color: var(--cm-muted);
+  text-align: center;
+
+  p {
+    margin: 0;
+    font-family: "Excalifont", "Virgil", cursive;
+    font-size: 1.25rem;
+    line-height: 1.4;
+    opacity: 0.8;
+  }
+}
+
+.excalidraw .app-comments-panel__art {
+  width: 85%;
+  max-width: 260px;
+  color: var(--cm-muted);
+}
+
+// ---- Footer "add comment" button (next to undo/redo) ----
+
+.excalidraw .footer-center:has(.app-footer-self-hosted) {
+  margin-inline-start: 0;
+  justify-content: flex-start;
+}
+
+.excalidraw .app-footer-self-hosted {
+  flex: 1;
+  margin-inline-start: 0.6rem;
+}
+
+.excalidraw .app-footer-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--lg-button-size);
+  height: var(--lg-button-size);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-lg);
+  background-color: var(--island-bg-color);
+  box-shadow: var(--shadow-island);
+  color: var(--icon-fill-color);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--button-hover-bg);
+  }
+
+  &.is-active {
+    background-color: var(--color-surface-primary-container);
+    color: var(--color-on-primary-container);
+  }
+}

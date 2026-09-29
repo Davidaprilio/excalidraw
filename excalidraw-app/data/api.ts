@@ -18,6 +18,30 @@ export interface Passkey {
   last_used_at: string | null;
 }
 
+export interface SceneComment {
+  id: string;
+  body: string;
+  author_id: string | null;
+  author_name: string | null;
+  author_avatar_version: string | null;
+  created_at: string;
+  edited_at: string | null;
+  reactions: { emoji: string; count: number; mine: boolean }[];
+}
+
+/** A comment thread pinned at (x, y) in scene coordinates */
+export interface CommentThread {
+  id: string;
+  x: number;
+  y: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  resolved_by_name: string | null;
+  comments: SceneComment[];
+}
+
 export interface SecurityOverview {
   totp: {
     enabled: boolean;
@@ -546,6 +570,81 @@ class ApiClient {
 
   async getSharedScene(token: string) {
     return this.request<{ scene: any }>(`/scenes/shared/${token}`);
+  }
+
+  // Comments (threads pinned on a scene)
+  async listComments(sceneId: string) {
+    return this.request<{ threads: CommentThread[] }>(
+      `/scenes/${sceneId}/comments`,
+    );
+  }
+
+  async createCommentThread(
+    sceneId: string,
+    data: { body: string; x: number; y: number },
+  ) {
+    return this.request<{ thread: CommentThread }>(
+      `/scenes/${sceneId}/comments`,
+      { method: "POST", body: JSON.stringify(data) },
+    );
+  }
+
+  async replyToThread(sceneId: string, threadId: string, body: string) {
+    return this.request<{ thread: CommentThread }>(
+      `/scenes/${sceneId}/comments/${threadId}/replies`,
+      { method: "POST", body: JSON.stringify({ body }) },
+    );
+  }
+
+  /** Resolve / reopen, or move the pin */
+  async updateThread(
+    sceneId: string,
+    threadId: string,
+    data: { resolved?: boolean; x?: number; y?: number },
+  ) {
+    return this.request<{ thread: CommentThread }>(
+      `/scenes/${sceneId}/comments/${threadId}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    );
+  }
+
+  async deleteThread(sceneId: string, threadId: string) {
+    return this.request(`/scenes/${sceneId}/comments/${threadId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async editComment(
+    sceneId: string,
+    threadId: string,
+    commentId: string,
+    body: string,
+  ) {
+    return this.request<{ thread: CommentThread }>(
+      `/scenes/${sceneId}/comments/${threadId}/replies/${commentId}`,
+      { method: "PATCH", body: JSON.stringify({ body }) },
+    );
+  }
+
+  /** Add my reaction, or remove it when already there */
+  async toggleReaction(
+    sceneId: string,
+    threadId: string,
+    commentId: string,
+    emoji: string,
+  ) {
+    return this.request<{ thread: CommentThread }>(
+      `/scenes/${sceneId}/comments/${threadId}/replies/${commentId}/reactions`,
+      { method: "POST", body: JSON.stringify({ emoji }) },
+    );
+  }
+
+  /** Resolves `thread: null` when that was its last comment (thread deleted) */
+  async deleteComment(sceneId: string, threadId: string, commentId: string) {
+    return this.request<{ thread: CommentThread | null }>(
+      `/scenes/${sceneId}/comments/${threadId}/replies/${commentId}`,
+      { method: "DELETE" },
+    );
   }
 
   // Workspaces
