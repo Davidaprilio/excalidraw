@@ -222,7 +222,14 @@ export function EditorSidebar({
           triggerClassName="app-editor-sidebar__workspace"
           trigger={
             <>
-              <Avatar name={workspace?.name ?? "?"} size="h-9 w-9 text-base" />
+              <Avatar
+                name={workspace?.name ?? "?"}
+                size="h-9 w-9 text-base"
+                src={
+                  workspace &&
+                  api.workspaceAvatarUrl(workspace.id, workspace.avatar_version)
+                }
+              />
               <span className="app-editor-sidebar__workspace-name">
                 {workspace?.name ?? "Loading..."}
               </span>

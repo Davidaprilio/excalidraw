@@ -1,12 +1,11 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import api from "../../../data/api";
-import { loadAvatarImage } from "../../../data/avatar";
-import { AvatarCropDialog } from "../AvatarCropDialog";
 import { useAuth } from "../../../auth/AuthContext";
 import { UserIcon } from "../icons";
 
-import { Avatar, Button, PageHeader, useToast, Card } from "../ui";
+import { PhotoField } from "../PhotoField";
+import { Button, PageHeader, useToast, Card } from "../ui";
 
 import { SecuritySection } from "./SecuritySection";
 
@@ -25,45 +24,6 @@ export function AccountPage() {
   });
   const [passwordError, setPasswordError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
-
-  // chosen image waiting in the crop dialog
-  const [cropping, setCropping] = useState<ImageBitmap | null>(null);
-
-  const choosePhoto = async (file: File) => {
-    try {
-      setCropping(await loadAvatarImage(file));
-    } catch (err: any) {
-      toast(err.message);
-    }
-  };
-
-  const closeCrop = () => {
-    cropping?.close();
-    setCropping(null);
-  };
-
-  const uploadPhoto = async (dataUrl: string) => {
-    const res = await api.uploadAvatar(dataUrl);
-    updateUser(res.user);
-    closeCrop();
-    toast("Profile photo updated");
-  };
-
-  const removePhoto = async () => {
-    setPhotoBusy(true);
-    try {
-      const res = await api.deleteAvatar();
-      updateUser(res.user);
-      toast("Profile photo removed");
-    } catch (err: any) {
-      toast(err.message);
-    } finally {
-      setPhotoBusy(false);
-    }
-  };
-
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
     try {
@@ -111,48 +71,18 @@ export function AccountPage() {
         <div className="flex flex-col gap-6">
           <Card title="Profile">
             <form onSubmit={saveProfile} className="flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                <Avatar
-                  name={name || user?.email || "?"}
-                  size="h-16 w-16 text-2xl"
-                  src={user && api.avatarUrl(user.id, user.avatar_version)}
-                />
-                <div className="flex flex-col gap-2">
-                  <div className="flex gap-2">
-                    <Button
-                      disabled={photoBusy}
-                      onClick={() => fileInput.current?.click()}
-                    >
-                      {user?.avatar_version ? "Change photo" : "Upload photo"}
-                    </Button>
-                    {user?.avatar_version && (
-                      <Button
-                        variant="ghost"
-                        disabled={photoBusy}
-                        onClick={removePhoto}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    JPG, PNG, WebP or GIF. You can crop it before saving.
-                  </p>
-                </div>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  hidden
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    if (file) {
-                      choosePhoto(file);
-                    }
-                  }}
-                />
-              </div>
+              <PhotoField
+                name={name || user?.email || "?"}
+                src={user && api.avatarUrl(user.id, user.avatar_version)}
+                onUpload={async (dataUrl) => {
+                  updateUser((await api.uploadAvatar(dataUrl)).user);
+                  toast("Profile photo updated");
+                }}
+                onRemove={async () => {
+                  updateUser((await api.deleteAvatar()).user);
+                  toast("Profile photo removed");
+                }}
+              />
               <Field label="Display name">
                 <input
                   value={name}
@@ -238,13 +168,6 @@ export function AccountPage() {
           <SecuritySection />
         </section>
       </div>
-      {cropping && (
-        <AvatarCropDialog
-          image={cropping}
-          onApply={uploadPhoto}
-          onClose={closeCrop}
-        />
-      )}
     </>
   );
 }

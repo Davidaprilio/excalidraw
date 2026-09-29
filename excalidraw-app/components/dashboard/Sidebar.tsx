@@ -180,7 +180,14 @@ function WorkspaceSwitcher() {
         triggerClassName="flex w-full items-center gap-3 rounded-lg p-1.5 text-left hover:bg-gray-100"
         trigger={
           <>
-            <Avatar name={workspace.name} size="h-9 w-9 text-base" />
+            <Avatar
+              name={workspace.name}
+              size="h-9 w-9 text-base"
+              src={api.workspaceAvatarUrl(
+                workspace.id,
+                workspace.avatar_version,
+              )}
+            />
             <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
               {workspace.name}
             </span>

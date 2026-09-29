@@ -38,6 +38,7 @@ export interface Workspace {
   is_owner: boolean;
   /** the owner's personal workspace: can't be deleted or left */
   is_personal: boolean;
+  avatar_version: string | null;
 }
 
 export interface DeletedWorkspace extends Omit<Workspace, "role"> {
@@ -360,6 +361,26 @@ class ApiClient {
     return version ? `${API_URL}/users/${userId}/avatar?v=${version}` : null;
   }
 
+  /** Public URL of a workspace photo, or null when it has none */
+  workspaceAvatarUrl(workspaceId: string, version: string | null | undefined) {
+    return version
+      ? `${API_URL}/workspaces/${workspaceId}/avatar?v=${version}`
+      : null;
+  }
+
+  async uploadWorkspaceAvatar(workspaceId: string, image: string) {
+    return this.request(`/workspaces/${workspaceId}/avatar`, {
+      method: "PUT",
+      body: JSON.stringify({ image }),
+    });
+  }
+
+  async deleteWorkspaceAvatar(workspaceId: string) {
+    return this.request(`/workspaces/${workspaceId}/avatar`, {
+      method: "DELETE",
+    });
+  }
+
   async uploadAvatar(image: string) {
     return this.request<{ user: any }>("/auth/me/avatar", {
       method: "PUT",
@@ -647,6 +668,7 @@ class ApiClient {
       invite: {
         workspaceId: string;
         workspaceName: string;
+        workspaceAvatarVersion: string | null;
         invitedByName: string | null;
         role: WorkspaceRole;
         email: string | null;

@@ -115,7 +115,10 @@ function DeletedWorkspaces() {
       <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
         {workspaces.map((w) => (
           <div key={w.id} className="flex items-center gap-3 px-4 py-3">
-            <Avatar name={w.name} />
+            <Avatar
+              name={w.name}
+              src={api.workspaceAvatarUrl(w.id, w.avatar_version)}
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-gray-900">
                 {w.name}

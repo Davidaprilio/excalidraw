@@ -61,7 +61,14 @@ export function InvitePage({ token }: { token: string }) {
         {invite && (
           <>
             <div className="flex justify-center">
-              <Avatar name={invite.workspaceName} size="h-14 w-14 text-2xl" />
+              <Avatar
+                name={invite.workspaceName}
+                size="h-14 w-14 text-2xl"
+                src={api.workspaceAvatarUrl(
+                  invite.workspaceId,
+                  invite.workspaceAvatarVersion,
+                )}
+              />
             </div>
             <h1 className="mt-4 text-lg font-semibold text-gray-900">
               Join {invite.workspaceName}

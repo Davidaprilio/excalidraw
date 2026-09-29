@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import api from "../../../data/api";
 import { navigateTo } from "../../../navigation";
 import { SettingsIcon } from "../icons";
+import { PhotoField } from "../PhotoField";
 import { Button, PageHeader, useToast } from "../ui";
 import {
   DeleteWorkspaceDialog,
@@ -60,6 +61,27 @@ export function SettingsPage() {
 
       <div className="flex max-w-2xl flex-col gap-6">
         <Card title="General">
+          <div className="mb-5">
+            <PhotoField
+              name={workspace.name}
+              src={api.workspaceAvatarUrl(
+                workspace.id,
+                workspace.avatar_version,
+              )}
+              canEdit={isAdmin}
+              hint="Shown in the workspace menu and on invites. JPG, PNG, WebP or GIF."
+              onUpload={async (dataUrl) => {
+                await api.uploadWorkspaceAvatar(workspace.id, dataUrl);
+                await reloadWorkspaces();
+                toast("Workspace photo updated");
+              }}
+              onRemove={async () => {
+                await api.deleteWorkspaceAvatar(workspace.id);
+                await reloadWorkspaces();
+                toast("Workspace photo removed");
+              }}
+            />
+          </div>
           <form onSubmit={rename} className="flex flex-col gap-3">
             <label className="flex flex-col gap-1.5 text-sm font-medium text-gray-700">
               Workspace name
