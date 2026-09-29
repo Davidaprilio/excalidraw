@@ -118,7 +118,7 @@ export function SceneCard({
               src={thumbnailUrl}
               alt=""
               draggable={false}
-              className="h-full w-full object-contain p-2"
+              className="scene-thumbnail h-full w-full object-contain p-2"
             />
           ) : (
             <div className="flex h-full items-center justify-center text-indigo-200">

@@ -93,7 +93,10 @@ export function MembersPage() {
                 key={member.id}
                 className="flex items-center gap-3 px-4 py-3"
               >
-                <Avatar name={member.name || member.email} />
+                <Avatar
+                  name={member.name || member.email}
+                  src={api.avatarUrl(member.id, member.avatar_version)}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-gray-900">
                     {member.name}{" "}

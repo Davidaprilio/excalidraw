@@ -7,7 +7,14 @@ import { RegisterPage } from "./auth/RegisterPage";
 import type { ReactNode } from "react";
 
 function AuthGate({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading, login, register } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading,
+    login,
+    completeMfaLogin,
+    loginWithPasskey,
+    register,
+  } = useAuth();
   const [page, setPage] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
 
@@ -32,15 +39,12 @@ function AuthGate({ children }: { children: ReactNode }) {
     if (page === "login") {
       return (
         <LoginPage
-          onLogin={async (email, password) => {
+          onLogin={(email, password) => {
             setError("");
-            try {
-              await login(email, password);
-            } catch (err: any) {
-              setError(err.message);
-              throw err;
-            }
+            return login(email, password);
           }}
+          onVerifyMfa={completeMfaLogin}
+          onPasskeyLogin={loginWithPasskey}
           onSwitchToRegister={() => setPage("register")}
           error={error}
         />

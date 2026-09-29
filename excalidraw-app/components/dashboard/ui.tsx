@@ -86,13 +86,18 @@ export function DropdownMenu({
   trigger,
   items,
   align = "right",
+  side = "bottom",
   triggerClassName = "",
+  menuClassName = "",
   label = "Open menu",
 }: {
   trigger: ReactNode;
   items: MenuItem[];
   align?: "left" | "right";
+  /** "top": open upwards (e.g. at the bottom of the sidebar) */
+  side?: "top" | "bottom";
   triggerClassName?: string;
+  menuClassName?: string;
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -118,9 +123,9 @@ export function DropdownMenu({
       {open && (
         <div
           role="menu"
-          className={`absolute top-full z-30 mt-1 min-w-48 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
+          className={`absolute z-30 min-w-48 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${
+            side === "top" ? "bottom-full mb-2" : "top-full mt-1"
+          } ${align === "right" ? "right-0" : "left-0"} ${menuClassName}`}
         >
           {items.map((item, index) =>
             item === "separator" ? (
@@ -338,11 +343,28 @@ const AVATAR_COLORS = [
 export function Avatar({
   name,
   size = "h-8 w-8 text-sm",
+  src,
 }: {
   name: string;
   size?: string;
+  /** photo URL; falls back to the initial when missing or broken */
+  src?: string | null;
 }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [src]);
   const hash = [...name].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        title={name}
+        draggable={false}
+        onError={() => setBroken(true)}
+        className={`inline-block shrink-0 rounded-full object-cover ${size}`}
+      />
+    );
+  }
   return (
     <span
       className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ${size} ${
@@ -360,6 +382,27 @@ export function ErrorBanner({ message }: { message: string }) {
       {message}
     </div>
   ) : null;
+}
+
+/** Section card used by the settings pages */
+export function Card({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-gray-200 p-5">
+      <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+      {description && (
+        <p className="mt-1 text-sm text-gray-500">{description}</p>
+      )}
+      <div className="mt-4">{children}</div>
+    </section>
+  );
 }
 
 // ---- Toast ----

@@ -145,6 +145,27 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       tailwindcss(),
+      // @tailwindcss/vite needs Vite >= 5.2 for its HMR; on this Vite 5.0 it
+      // misses classes newly added to a file until restart. Rebuild
+      // tailwind.css whenever an app source file changes.
+      {
+        name: "tailwind-rescan-on-change",
+        apply: "serve",
+        handleHotUpdate({ file, server, modules }) {
+          if (!/\/excalidraw-app\/.*\.[jt]sx?$/.test(file)) {
+            return;
+          }
+          const tailwindModules = [
+            ...(server.moduleGraph.getModulesByFile(
+              path.resolve(__dirname, "tailwind.css"),
+            ) ?? []),
+          ];
+          tailwindModules.forEach((mod) =>
+            server.moduleGraph.invalidateModule(mod),
+          );
+          return [...modules, ...tailwindModules];
+        },
+      },
       Sitemap({
         hostname: "https://excalidraw.com",
         outDir: "build",

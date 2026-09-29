@@ -159,6 +159,7 @@ import { SelfHostedAppWrapper } from "./SelfHostedApp";
 import { Dashboard } from "./components/Dashboard";
 import { SharedSceneViewer } from "./components/SharedSceneViewer";
 import { SceneTitle } from "./components/SceneTitle";
+import { EditorUserAvatar } from "./components/EditorUserAvatar";
 import { EditorSidebar } from "./components/editor-sidebar/EditorSidebar";
 import { SidebarIcon } from "./components/dashboard/icons";
 import { navigateTo } from "./navigation";
@@ -477,6 +478,21 @@ const ExcalidrawWrapper = () => {
     [],
   );
   const [isSidebarOpen, setSidebarOpen] = useEditorSidebarOpen();
+  // stays mounted while the close animation plays
+  const [isSidebarMounted, setSidebarMounted] = useState(isSidebarOpen);
+  // only animate when toggled, not when a scene opens with the sidebar already open
+  const [sidebarAnimation, setSidebarAnimation] = useState<
+    "enter" | "exit" | null
+  >(null);
+  const toggleSidebar = () => {
+    if (isSidebarOpen) {
+      setSidebarAnimation("exit");
+    } else {
+      setSidebarAnimation("enter");
+      setSidebarMounted(true);
+    }
+    setSidebarOpen(!isSidebarOpen);
+  };
   const showToast = useCallback(
     (message: string) => excalidrawAPI?.setToast({ message, duration: 3000 }),
     [excalidrawAPI],
@@ -1073,11 +1089,20 @@ const ExcalidrawWrapper = () => {
       style={{ height: "100%" }}
       className={clsx("excalidraw-app", {
         "is-collaborating": isCollaborating,
-        "has-editor-sidebar": IS_SELF_HOSTED && isSidebarOpen,
+        "has-editor-sidebar": IS_SELF_HOSTED && isSidebarMounted,
+        "app-theme--dark": editorTheme === "dark",
       })}
     >
-      {IS_SELF_HOSTED && isSidebarOpen && sceneTitle !== null && (
-        <EditorSidebar theme={editorTheme} onToast={showToast} />
+      {IS_SELF_HOSTED && isSidebarMounted && sceneTitle !== null && (
+        <EditorSidebar
+          theme={editorTheme}
+          onToast={showToast}
+          animation={sidebarAnimation}
+          onClosed={() => {
+            setSidebarMounted(false);
+            setSidebarAnimation(null);
+          }}
+        />
       )}
       <Excalidraw
         // also the default file name for exports
@@ -1139,7 +1164,7 @@ const ExcalidrawWrapper = () => {
                 aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
                 aria-pressed={isSidebarOpen}
                 title={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
-                onClick={() => setSidebarOpen(!isSidebarOpen)}
+                onClick={toggleSidebar}
               >
                 <SidebarIcon />
               </button>
@@ -1162,11 +1187,7 @@ const ExcalidrawWrapper = () => {
                   isSignedIn={isExcalidrawPlusSignedUser}
                 />
               )} */}
-              <img
-                src="https://placehold.co/50?text=AB"
-                alt="profile"
-                className="app-profile-avatar"
-              />
+              <EditorUserAvatar />
               {collabError.message && <CollabError collabError={collabError} />}
               <LiveCollaborationTrigger
                 isCollaborating={isCollaborating}

@@ -47,9 +47,14 @@ type Sort = "recent" | "name";
 export function EditorSidebar({
   theme,
   onToast,
+  animation,
+  onClosed,
 }: {
   theme: "light" | "dark";
   onToast: (message: string) => void;
+  /** "enter": slide in (opened by the user); "exit": slide out, then onClosed */
+  animation: "enter" | "exit" | null;
+  onClosed: () => void;
 }) {
   const [openScene, setOpenScene] = useState(serverData.getSceneInfo());
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -201,8 +206,15 @@ export function EditorSidebar({
 
   return (
     <aside
-      className={`app-editor-sidebar${theme === "dark" ? " theme--dark" : ""}`}
+      className={`app-editor-sidebar${theme === "dark" ? " theme--dark" : ""}${
+        animation ? ` is-${animation}ing` : ""
+      }`}
       aria-label="Scenes sidebar"
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget && animation === "exit") {
+          onClosed();
+        }
+      }}
     >
       <div className="app-editor-sidebar__top">
         <SidebarMenu

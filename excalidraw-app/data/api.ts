@@ -1,6 +1,31 @@
+import {
+  startAuthentication,
+  startRegistration,
+} from "@simplewebauthn/browser";
+
 const API_URL = import.meta.env.VITE_APP_API_URL || "/api";
 
 export type WorkspaceRole = "admin" | "member";
+
+type Session = { accessToken: string; refreshToken: string; user: any };
+
+export interface Passkey {
+  id: string;
+  name: string;
+  device_type: string | null;
+  backed_up: boolean | null;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface SecurityOverview {
+  totp: {
+    enabled: boolean;
+    enabledAt: string | null;
+    recoveryCodesRemaining: number;
+  };
+  passkeys: Passkey[];
+}
 
 export interface Workspace {
   id: string;
@@ -60,6 +85,7 @@ export interface WorkspaceMember {
   role: WorkspaceRole;
   joined_at: string;
   is_owner: boolean;
+  avatar_version: string | null;
 }
 
 export interface WorkspaceInvite {
@@ -210,21 +236,153 @@ class ApiClient {
     return res;
   }
 
-  async login(email: string, password: string) {
-    const res = await this.request<{
-      accessToken: string;
-      refreshToken: string;
-      user: any;
-    }>("/auth/login", {
+  /** With two-factor on, resolves `{ mfaToken }`: finish with completeMfaLogin */
+  async login(
+    email: string,
+    password: string,
+  ): Promise<{ user: any } | { mfaToken: string }> {
+    const res = await this.request<
+      | { accessToken: string; refreshToken: string; user: any }
+      | { mfaRequired: true; mfaToken: string }
+    >("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
+    });
+    if ("mfaRequired" in res) {
+      return { mfaToken: res.mfaToken };
+    }
+    this.setTokens(res.accessToken, res.refreshToken);
+    return res;
+  }
+
+  async completeMfaLogin(
+    mfaToken: string,
+    second: { code: string } | { recoveryCode: string },
+  ) {
+    const res = await this.request<Session>("/auth/login/mfa", {
+      method: "POST",
+      body: JSON.stringify({ mfaToken, ...second }),
     });
     this.setTokens(res.accessToken, res.refreshToken);
     return res;
   }
 
+  /** Sign in with a passkey (the browser shows its passkey picker) */
+  async loginWithPasskey() {
+    const { options, challengeToken } = await this.request<{
+      options: any;
+      challengeToken: string;
+    }>("/auth/passkeys/login/options", { method: "POST" });
+    const response = await startAuthentication({ optionsJSON: options });
+    const res = await this.request<Session>("/auth/passkeys/login/verify", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken, response }),
+    });
+    this.setTokens(res.accessToken, res.refreshToken);
+    return res;
+  }
+
+  // Security settings (two-factor + passkeys)
+  async getSecurity() {
+    return this.request<SecurityOverview>("/auth/security");
+  }
+
+  async startTotpSetup() {
+    return this.request<{ secret: string; uri: string; qr: string }>(
+      "/auth/mfa/totp/setup",
+      { method: "POST" },
+    );
+  }
+
+  async enableTotp(code: string) {
+    return this.request<{ recoveryCodes: string[] }>("/auth/mfa/totp/enable", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async disableTotp(password: string) {
+    return this.request("/auth/mfa/totp/disable", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  async regenerateRecoveryCodes(password: string) {
+    return this.request<{ recoveryCodes: string[] }>(
+      "/auth/mfa/recovery-codes",
+      { method: "POST", body: JSON.stringify({ password }) },
+    );
+  }
+
+  /** Create a passkey on this device (the browser asks to confirm) */
+  async registerPasskey(name: string) {
+    const { options, challengeToken } = await this.request<{
+      options: any;
+      challengeToken: string;
+    }>("/auth/passkeys/register/options", { method: "POST" });
+    const response = await startRegistration({ optionsJSON: options });
+    return this.request<{ passkey: Passkey }>(
+      "/auth/passkeys/register/verify",
+      {
+        method: "POST",
+        body: JSON.stringify({ challengeToken, response, name }),
+      },
+    );
+  }
+
+  async renamePasskey(id: string, name: string) {
+    return this.request<{ passkey: Passkey }>(
+      `/auth/passkeys/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify({ name }) },
+    );
+  }
+
+  async deletePasskey(id: string) {
+    return this.request(`/auth/passkeys/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  }
+
   async getMe() {
     return this.request<{ user: any }>("/auth/me");
+  }
+
+  async updateProfile(data: { name: string }) {
+    return this.request<{ user: any }>("/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /** Public URL of a profile photo, or null when the user has none */
+  avatarUrl(userId: string, version: string | null | undefined) {
+    return version ? `${API_URL}/users/${userId}/avatar?v=${version}` : null;
+  }
+
+  async uploadAvatar(image: string) {
+    return this.request<{ user: any }>("/auth/me/avatar", {
+      method: "PUT",
+      body: JSON.stringify({ image }),
+    });
+  }
+
+  async deleteAvatar() {
+    return this.request<{ user: any }>("/auth/me/avatar", {
+      method: "DELETE",
+    });
+  }
+
+  /** Signs out other devices; this one keeps its session */
+  async changePassword(currentPassword: string, newPassword: string) {
+    return this.request("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+        refreshToken: this.refreshTokenValue,
+      }),
+    });
   }
 
   logout() {

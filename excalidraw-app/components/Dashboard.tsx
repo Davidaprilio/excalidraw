@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
+import { AccountPage } from "./dashboard/pages/AccountPage";
 import { CollectionPage } from "./dashboard/pages/CollectionPage";
+import { PreferencesPage } from "./dashboard/pages/PreferencesPage";
 import { HomePage, newScene } from "./dashboard/pages/HomePage";
 import { InvitePage } from "./dashboard/pages/InvitePage";
 import { MembersPage } from "./dashboard/pages/MembersPage";
@@ -8,21 +10,25 @@ import { SettingsPage } from "./dashboard/pages/SettingsPage";
 import { TrashPage } from "./dashboard/pages/TrashPage";
 import { QuickSearch } from "./dashboard/QuickSearch";
 import { Sidebar } from "./dashboard/Sidebar";
+import { DashboardThemeProvider } from "./dashboard/theme";
 import { ToastProvider } from "./dashboard/ui";
 import { WorkspaceProvider } from "./dashboard/WorkspaceContext";
 
-/** Logged-in app outside the editor: "/", /collections/:id, /trash, /members, /settings, /invite/:token */
+/** Logged-in app outside the editor: "/", /collections/:id, /trash, /members, /settings, /account, /preferences, /invite/:token */
 export function Dashboard({ path }: { path: string }) {
   const inviteMatch = path.match(/^\/invite\/([^/]+)$/);
-  if (inviteMatch) {
-    return <InvitePage token={inviteMatch[1]} />;
-  }
   return (
-    <ToastProvider>
-      <WorkspaceProvider>
-        <Shell path={path} />
-      </WorkspaceProvider>
-    </ToastProvider>
+    <DashboardThemeProvider>
+      {inviteMatch ? (
+        <InvitePage token={inviteMatch[1]} />
+      ) : (
+        <ToastProvider>
+          <WorkspaceProvider>
+            <Shell path={path} />
+          </WorkspaceProvider>
+        </ToastProvider>
+      )}
+    </DashboardThemeProvider>
   );
 }
 
@@ -55,6 +61,10 @@ function Shell({ path }: { path: string }) {
     <MembersPage />
   ) : path === "/settings" ? (
     <SettingsPage />
+  ) : path === "/account" ? (
+    <AccountPage />
+  ) : path === "/preferences" ? (
+    <PreferencesPage />
   ) : (
     <HomePage />
   );

@@ -44,3 +44,64 @@
     font-family: inherit;
   }
 }
+
+/*
+ * Dashboard dark theme (html.dashboard-dark, set from the shared app theme).
+ * Tailwind utilities read their colors from these variables, so remapping the
+ * palette re-themes every dashboard page without dark: variants in the markup.
+ * Colors follow Excalidraw's dark editor.
+ */
+html.dashboard-dark .dashboard-root {
+  color-scheme: dark;
+
+  --color-gray-50: #1c1c22;
+  --color-gray-100: #26262e;
+  --color-gray-200: #32323b;
+  --color-gray-300: #43434d;
+  --color-gray-400: #74747f;
+  --color-gray-500: #9d9da8;
+  --color-gray-600: #b8b8c2;
+  --color-gray-700: #d0d0d8;
+  --color-gray-800: #e2e2e8;
+  --color-gray-900: #f1f1f5;
+
+  --color-indigo-50: #2b2a4a;
+  --color-indigo-100: #3a3870;
+  --color-indigo-200: #4a47a0;
+  --color-indigo-400: #8f8cff;
+  --color-violet-50: #29253f;
+  --color-pink-50: #362433;
+
+  --color-red-50: #3b1f24;
+  --color-red-100: #5a2a30;
+  --color-red-200: #6b2f36;
+  --color-amber-50: #3a3120;
+  --color-amber-800: #f3d38a;
+}
+
+/* Unlayered, so they win over the utilities layer */
+html.dashboard-dark .dashboard-root.bg-white {
+  background-color: #121212; /* page */
+}
+html.dashboard-dark .dashboard-root .bg-white {
+  background-color: #1e1e24; /* cards, menus, dialogs, inputs */
+}
+html.dashboard-dark .dashboard-root .bg-white\/90 {
+  background-color: rgb(30 30 36 / 0.9);
+}
+html.dashboard-dark .dashboard-root .bg-gray-900\/30 {
+  background-color: rgb(0 0 0 / 0.6); /* modal overlay */
+}
+html.dashboard-dark .dashboard-root.bg-gray-900 {
+  background-color: #2e2e36; /* toast */
+}
+html.dashboard-dark .dashboard-root :is(.text-indigo-600, .text-indigo-700) {
+  color: #a8a5ff;
+}
+html.dashboard-dark .dashboard-root :is(.text-red-600, .text-red-700) {
+  color: #ff8a8a;
+}
+/* Render thumbnails the way Excalidraw renders the dark canvas */
+html.dashboard-dark .dashboard-root .scene-thumbnail {
+  filter: invert(93%) hue-rotate(180deg);
+}

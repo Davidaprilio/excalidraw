@@ -68,6 +68,7 @@
 
   // Same size as the share (LiveCollaborationTrigger) button next to it
   .app-profile-avatar {
+    box-sizing: border-box;
     width: var(--lg-button-size);
     height: var(--lg-button-size);
     flex-shrink: 0;

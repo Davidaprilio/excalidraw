@@ -10,6 +10,8 @@ import {
   FolderIcon,
   LockIcon,
   LogOutIcon,
+  SlidersIcon,
+  UserIcon,
   MoreIcon,
   PlusIcon,
   SearchIcon,
@@ -85,23 +87,46 @@ export function Sidebar({
         ))}
       </div>
 
-      <div className="flex items-center gap-3 border-t border-gray-200 p-4">
-        <Avatar name={user?.name || user?.email || "?"} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-gray-900">
-            {user?.name}
-          </p>
-          <p className="truncate text-xs text-gray-500">{user?.email}</p>
-        </div>
-        <button
-          type="button"
-          aria-label="Log out"
-          title="Log out"
-          onClick={logout}
-          className="cursor-pointer rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-        >
-          <LogOutIcon />
-        </button>
+      <div className="border-t border-gray-200 p-3">
+        {/* opens upwards; more account items (devices, passkeys...) go here */}
+        <DropdownMenu
+          side="top"
+          align="left"
+          label="Account menu"
+          triggerClassName="flex w-full items-center gap-3 rounded-lg p-1.5 text-left hover:bg-gray-100"
+          menuClassName="w-full"
+          trigger={
+            <>
+              <Avatar
+                name={user?.name || user?.email || "?"}
+                src={user && api.avatarUrl(user.id, user.avatar_version)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-gray-900">
+                  {user?.name}
+                </span>
+                <span className="block truncate text-xs text-gray-500">
+                  {user?.email}
+                </span>
+              </span>
+              <ChevronsUpDownIcon className="h-4 w-4 text-gray-400" />
+            </>
+          }
+          items={[
+            {
+              label: "Account settings",
+              icon: <UserIcon />,
+              onSelect: () => navigateTo("/account"),
+            },
+            {
+              label: "Preferences",
+              icon: <SlidersIcon />,
+              onSelect: () => navigateTo("/preferences"),
+            },
+            "separator",
+            { label: "Log out", icon: <LogOutIcon />, onSelect: logout },
+          ]}
+        />
       </div>
 
       {creatingCollection && (
