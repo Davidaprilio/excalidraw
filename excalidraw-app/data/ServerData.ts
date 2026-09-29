@@ -265,7 +265,14 @@ export class ServerData {
     elements: readonly ExcalidrawElement[],
     appState: Partial<AppState>,
   ): string {
-    return `${hashElementsVersion(elements)}:${appState.viewBackgroundColor}`;
+    // the grid is saved per scene, so toggling it is a change to save
+    return [
+      hashElementsVersion(elements),
+      appState.viewBackgroundColor,
+      appState.gridModeEnabled,
+      appState.gridSize,
+      appState.gridStep,
+    ].join(":");
   }
 
   // Only drawing-level settings (grid, background...). UI state such as an

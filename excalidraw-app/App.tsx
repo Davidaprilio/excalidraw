@@ -288,7 +288,15 @@ const initializeScene = async (opts: {
       }),
       appState: restoreAppState(
         clearAppStateForDatabase(serverScene.appState),
-        localAppState && { ...localAppState, openMenu: null },
+        localAppState && {
+          ...localAppState,
+          openMenu: null,
+          // the grid belongs to each scene: a scene saved without it gets the
+          // default (off), not the grid of whichever board was open last
+          gridModeEnabled: undefined,
+          gridSize: undefined,
+          gridStep: undefined,
+        },
       ),
       // scroll position isn't stored per board, so bring the drawing into view
       scrollToContent: true,

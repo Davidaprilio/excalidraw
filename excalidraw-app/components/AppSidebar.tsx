@@ -77,7 +77,12 @@ export const AppSidebar = () => {
       <DefaultSidebar.TabTriggers>
         <Sidebar.TabTrigger
           tab="comments"
-          style={{ opacity: openSidebar?.tab === "comments" ? 1 : 0.4 }}
+          // dimmed like the other promo tabs, unless comments actually work
+          style={
+            IS_SELF_HOSTED
+              ? undefined
+              : { opacity: openSidebar?.tab === "comments" ? 1 : 0.4 }
+          }
         >
           {messageCircleIcon}
         </Sidebar.TabTrigger>
