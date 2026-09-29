@@ -1,12 +1,15 @@
-import { FolderIcon, LockIcon, PencilIcon } from "../icons";
+import { useAuth } from "../../../auth/AuthContext";
+import { navigateTo } from "../../../navigation";
+import { FolderIcon, LockIcon, PencilIcon, SettingsIcon } from "../icons";
 import { SceneGrid } from "../SceneGrid";
-import { EmptyState, ErrorBanner, PageHeader } from "../ui";
+import { Button, EmptyState, ErrorBanner, PageHeader } from "../ui";
 import { useScenes } from "../useScenes";
 import { useWorkspace } from "../WorkspaceContext";
 
 import { StartDrawingButton } from "./HomePage";
 
 export function CollectionPage({ collectionId }: { collectionId: string }) {
+  const { user } = useAuth();
   const { workspace, collections, collectionsLoaded } = useWorkspace();
   const collection = collections.find((c) => c.id === collectionId);
   const { scenes, error, reload } = useScenes({
@@ -25,6 +28,9 @@ export function CollectionPage({ collectionId }: { collectionId: string }) {
   }
 
   const isPrivate = collection.visibility === "private";
+  const canManage =
+    !collection.is_personal &&
+    (collection.owner_id === user?.id || workspace.role === "admin");
 
   return (
     <>
@@ -44,7 +50,20 @@ export function CollectionPage({ collectionId }: { collectionId: string }) {
             ? "Only you can see this collection."
             : `Shared with everyone in ${workspace.name}.`
         }
-        actions={<StartDrawingButton collectionId={collection.id} />}
+        actions={
+          <div className="flex gap-2">
+            {canManage && (
+              <Button
+                onClick={() =>
+                  navigateTo(`/collections/${collection.id}/settings`)
+                }
+              >
+                <SettingsIcon /> Settings
+              </Button>
+            )}
+            <StartDrawingButton collectionId={collection.id} />
+          </div>
+        }
       />
       <ErrorBanner message={error} />
       {scenes === null ? (

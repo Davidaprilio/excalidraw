@@ -159,6 +159,7 @@ import { setStoredWorkspaceId } from "./data/workspace";
 import { SelfHostedAppWrapper } from "./SelfHostedApp";
 import { Dashboard } from "./components/Dashboard";
 import { SharedSceneViewer } from "./components/SharedSceneViewer";
+import { SharedCollectionViewer } from "./components/SharedCollectionViewer";
 import { SceneTitle } from "./components/SceneTitle";
 import { EditorUserAvatar } from "./components/EditorUserAvatar";
 import { CommentsProvider } from "./components/comments/CommentsContext";
@@ -1575,7 +1576,20 @@ function SelfHostedRouting() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // Public read-only link, no login required
+  // Public read-only links, no login required
+  const collectionShareMatch = currentPath.match(
+    /^\/share\/c\/([^/]+)(?:\/([^/]+))?$/,
+  );
+  if (collectionShareMatch) {
+    return (
+      <TopErrorBoundary>
+        <SharedCollectionViewer
+          token={collectionShareMatch[1]}
+          sceneId={collectionShareMatch[2]}
+        />
+      </TopErrorBoundary>
+    );
+  }
   const shareMatch = currentPath.match(/^\/share\/([^/]+)$/);
   if (shareMatch) {
     return (

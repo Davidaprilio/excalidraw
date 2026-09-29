@@ -198,3 +198,46 @@
     }
   }
 }
+
+// Scene name, top center of the read-only viewer of a shared link
+.excalidraw .shared-viewer-title {
+  position: absolute;
+  top: var(--editor-container-padding, 1rem);
+  left: 50%;
+  z-index: var(--zIndex-layerUI, 4);
+  max-width: min(60vw, 32rem);
+  height: var(--lg-button-size, 2.25rem);
+  padding: 0 1rem;
+  overflow: hidden;
+  transform: translateX(-50%);
+  border-radius: var(--border-radius-lg, 0.5rem);
+  background: var(--island-bg-color);
+  box-shadow: var(--shadow-island);
+  color: var(--color-on-surface);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: var(--lg-button-size, 2.25rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+// Focus mode of the read-only viewer (Ctrl+\): only the drawing
+.shared-viewer--focus .excalidraw {
+  .main-menu-trigger,
+  .layer-ui__wrapper__footer-left,
+  .layer-ui__wrapper__footer-right,
+  .shared-viewer-title {
+    visibility: hidden;
+    opacity: 0;
+  }
+}
+
+.shared-viewer .excalidraw {
+  .main-menu-trigger,
+  .layer-ui__wrapper__footer-left,
+  .layer-ui__wrapper__footer-right,
+  .shared-viewer-title {
+    transition: opacity 0.15s ease, visibility 0.15s;
+  }
+}

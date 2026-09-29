@@ -13,6 +13,7 @@ import {
   SlidersIcon,
   UserIcon,
   MoreIcon,
+  PencilIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -20,6 +21,7 @@ import {
   UsersIcon,
 } from "./icons";
 import { Avatar, DropdownMenu, PromptDialog, useToast } from "./ui";
+import { DeleteCollectionDialog } from "./WorkspaceDialogs";
 import { useWorkspace } from "./WorkspaceContext";
 
 import type { Collection } from "../../data/api";
@@ -238,8 +240,9 @@ function CollectionItem({
   const { workspace, reloadCollections } = useWorkspace();
   const toast = useToast();
   const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const href = `/collections/${collection.id}`;
-  const active = path === href;
+  const active = path === href || path === `${href}/settings`;
   const canManage =
     !collection.is_personal &&
     (collection.owner_id === user?.id || workspace.role === "admin");
@@ -284,7 +287,13 @@ function CollectionItem({
             trigger={<MoreIcon />}
             items={[
               {
+                label: "Settings",
+                icon: <SettingsIcon />,
+                onSelect: () => navigateTo(`${href}/settings`),
+              },
+              {
                 label: "Rename",
+                icon: <PencilIcon />,
                 onSelect: () => setRenaming(true),
               },
               collection.visibility === "workspace"
@@ -317,22 +326,26 @@ function CollectionItem({
                 label: "Delete collection",
                 icon: <TrashIcon />,
                 danger: true,
-                onSelect: () => {
-                  if (
-                    window.confirm(
-                      `Delete "${collection.name}"? Its scenes will be moved to the trash.`,
-                    )
-                  ) {
-                    update(
-                      () => api.deleteCollection(workspace.id, collection.id),
-                      "Collection deleted",
-                    ).then(() => active && navigateTo("/"));
-                  }
-                },
+                onSelect: () => setDeleting(true),
               },
             ]}
           />
         </div>
+      )}
+      {deleting && (
+        <DeleteCollectionDialog
+          workspaceId={workspace.id}
+          collection={collection}
+          onClose={() => setDeleting(false)}
+          onDeleted={() => {
+            setDeleting(false);
+            toast(`"${collection.name}" deleted`);
+            if (active) {
+              navigateTo("/");
+            }
+            reloadCollections().catch(() => {});
+          }}
+        />
       )}
       {renaming && (
         <PromptDialog

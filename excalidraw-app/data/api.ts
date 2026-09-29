@@ -61,6 +61,8 @@ export interface SceneAccess {
   /** anyone with the share link can view it */
   is_shared: boolean;
   share_token: string | null;
+  /** viewers of the link may "Save to..." a copy */
+  share_allow_save: boolean;
   users: SceneAccessUser[];
 }
 
@@ -107,6 +109,20 @@ export interface Collection {
   owner_id: string | null;
   owner_name?: string;
   scene_count: number;
+  /** set while the collection is shared by read-only link */
+  share_token: string | null;
+  /** viewers of the link may "Save to..." copies */
+  share_allow_save: boolean;
+}
+
+export interface SharedCollection {
+  collection: { name: string; workspace_name: string; allow_save: boolean };
+  scenes: {
+    id: string;
+    title: string;
+    updated_at: string;
+    has_thumbnail: boolean;
+  }[];
 }
 
 export interface SceneSummary {
@@ -596,6 +612,14 @@ class ApiClient {
     });
   }
 
+  /** Share link options (the link must exist) */
+  async setSceneShareAllowSave(id: string, allowSave: boolean) {
+    return this.request<{ scene: any }>(`/scenes/${id}/share`, {
+      method: "PATCH",
+      body: JSON.stringify({ allowSave }),
+    });
+  }
+
   async unshareScene(id: string) {
     return this.request<{ scene: any }>(`/scenes/${id}/share`, {
       method: "DELETE",
@@ -854,6 +878,48 @@ class ApiClient {
   }
 
   /** Its scenes are moved to the trash */
+  /** Read-only link to every scene in the collection */
+  async shareCollection(workspaceId: string, collectionId: string) {
+    return this.request<{ collection: { id: string; share_token: string } }>(
+      `/workspaces/${workspaceId}/collections/${collectionId}/share`,
+      { method: "POST" },
+    );
+  }
+
+  async setCollectionShareAllowSave(
+    workspaceId: string,
+    collectionId: string,
+    allowSave: boolean,
+  ) {
+    return this.request(
+      `/workspaces/${workspaceId}/collections/${collectionId}/share`,
+      { method: "PATCH", body: JSON.stringify({ allowSave }) },
+    );
+  }
+
+  /** Stops the link; sharing again gives a new one */
+  async unshareCollection(workspaceId: string, collectionId: string) {
+    return this.request(
+      `/workspaces/${workspaceId}/collections/${collectionId}/share`,
+      { method: "DELETE" },
+    );
+  }
+
+  // Public (no login): a collection shared by link
+  async getSharedCollection(token: string) {
+    return this.request<SharedCollection>(`/shared/collections/${token}`);
+  }
+
+  async getSharedCollectionScene(token: string, sceneId: string) {
+    return this.request<{ scene: any }>(
+      `/shared/collections/${token}/scenes/${sceneId}`,
+    );
+  }
+
+  sharedCollectionThumbnailUrl(token: string, sceneId: string) {
+    return `${API_URL}/shared/collections/${token}/scenes/${sceneId}/thumbnail`;
+  }
+
   async deleteCollection(workspaceId: string, collectionId: string) {
     return this.request(
       `/workspaces/${workspaceId}/collections/${collectionId}`,

@@ -147,6 +147,25 @@ export function SceneUsersPanel() {
     }
   };
 
+  const setAllowSave = async (allowSave: boolean) => {
+    setBusy(true);
+    // tick at once; the reload below brings the server's value back
+    setAccess({ ...access, share_allow_save: allowSave });
+    try {
+      await api.setSceneShareAllowSave(sceneId, allowSave);
+      notify(
+        allowSave
+          ? "Viewers can save a copy"
+          : "Viewers can no longer save a copy",
+      );
+    } catch (err: any) {
+      notify(err.message);
+    } finally {
+      await reload();
+      setBusy(false);
+    }
+  };
+
   const shared = access.collection?.visibility === "workspace";
   const owner = access.users.find((user) => user.access === "owner");
 
@@ -208,7 +227,22 @@ export function SceneUsersPanel() {
             {UnlinkIcon}
           </button>
         </div>
-      ) : (
+      ) : null}
+      {shareLink && (
+        <label className="app-users-panel__option">
+          <input
+            type="checkbox"
+            checked={access.share_allow_save}
+            disabled={busy}
+            onChange={(event) => setAllowSave(event.target.checked)}
+          />
+          <span>
+            Allow saving a copy
+            <small>"Save to..." in the viewer's menu</small>
+          </span>
+        </label>
+      )}
+      {!shareLink && (
         <div className="app-users-panel__row">
           <span className="app-users-panel__icon is-off">{LinkIcon}</span>
           <span className="app-users-panel__who">

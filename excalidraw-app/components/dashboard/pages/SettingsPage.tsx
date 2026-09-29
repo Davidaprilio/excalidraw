@@ -171,7 +171,7 @@ export function SettingsPage() {
   );
 }
 
-function Card({
+export function Card({
   title,
   danger,
   children,
@@ -198,7 +198,7 @@ function Card({
   );
 }
 
-function Row({
+export function Row({
   title,
   description,
   action,

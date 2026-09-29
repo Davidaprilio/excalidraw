@@ -5,7 +5,7 @@ import { useAuth } from "../../auth/AuthContext";
 
 import { Button, Modal } from "./ui";
 
-import type { Workspace, WorkspaceMember } from "../../data/api";
+import type { Collection, Workspace, WorkspaceMember } from "../../data/api";
 import type { ReactNode } from "react";
 
 /**
@@ -118,6 +118,81 @@ export function DeleteWorkspaceDialog({
           onClick={remove}
         >
           Delete workspace
+        </Button>
+      </DialogActions>
+    </Modal>
+  );
+}
+
+/**
+ * Delete a collection: its scenes go to the trash. Typing the collection's name
+ * enables the button.
+ */
+export function DeleteCollectionDialog({
+  workspaceId,
+  collection,
+  onClose,
+  onDeleted,
+}: {
+  workspaceId: string;
+  collection: Collection;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const matches = typed === collection.name;
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.deleteCollection(workspaceId, collection.id);
+      onDeleted();
+    } catch (err: any) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`Delete "${collection.name}"?`} onClose={onClose}>
+      <div className="flex flex-col gap-3 text-sm text-gray-600">
+        <p>
+          Its{" "}
+          <b className="font-semibold text-gray-900">
+            {collection.scene_count} scene
+            {collection.scene_count === 1 ? "" : "s"}
+          </b>{" "}
+          will be moved to the trash (restoring puts them in your Private
+          collection)
+          {collection.share_token ? " and its share link stops working" : ""}.
+        </p>
+        <label className="flex flex-col gap-2">
+          <span>
+            Type{" "}
+            <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-900 select-all">
+              {collection.name}
+            </code>{" "}
+            to confirm.
+          </span>
+          <input
+            autoFocus
+            aria-label="Collection name"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            onKeyDown={(event) =>
+              event.key === "Enter" && matches && !busy && remove()
+            }
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+          />
+        </label>
+      </div>
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="danger" disabled={!matches || busy} onClick={remove}>
+          Delete collection
         </Button>
       </DialogActions>
     </Modal>
