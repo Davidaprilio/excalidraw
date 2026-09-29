@@ -161,10 +161,13 @@ import { SharedSceneViewer } from "./components/SharedSceneViewer";
 import { SceneTitle } from "./components/SceneTitle";
 import { EditorUserAvatar } from "./components/EditorUserAvatar";
 import { CommentsProvider } from "./components/comments/CommentsContext";
+
 import { CommentsOverlay } from "./components/comments/CommentsOverlay";
 import { EditorSidebar } from "./components/editor-sidebar/EditorSidebar";
 import { SidebarIcon } from "./components/dashboard/icons";
 import { navigateTo } from "./navigation";
+
+import type { ContextMenuItemsFn } from "./components/comments/CommentsContext";
 
 import type { CollabAPI } from "./collab/Collab";
 
@@ -527,6 +530,13 @@ const ExcalidrawWrapper = () => {
   }
 
   const debugCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // "Add comment" in the context menu, provided by <CommentsProvider>
+  const commentsMenuRef = useRef<ContextMenuItemsFn | null>(null);
+  const contextMenuItems = useCallback<ContextMenuItemsFn>(
+    (context) => commentsMenuRef.current?.(context) ?? [],
+    [],
+  );
 
   useEffect(() => {
     trackEvent("load", "frame", getFrame());
@@ -1095,7 +1105,10 @@ const ExcalidrawWrapper = () => {
         "app-theme--dark": editorTheme === "dark",
       })}
     >
-      <CommentsProvider excalidrawAPI={excalidrawAPI}>
+      <CommentsProvider
+        excalidrawAPI={excalidrawAPI}
+        contextMenuRef={commentsMenuRef}
+      >
         {IS_SELF_HOSTED && (
           <CommentsOverlay excalidrawAPI={excalidrawAPI} theme={editorTheme} />
         )}
@@ -1120,6 +1133,7 @@ const ExcalidrawWrapper = () => {
           initialData={initialStatePromiseRef.current.promise}
           isCollaborating={isCollaborating}
           onPointerUpdate={collabAPI?.onPointerUpdate}
+          contextMenuItems={IS_SELF_HOSTED ? contextMenuItems : undefined}
           UIOptions={{
             canvasActions: {
               toggleTheme: true,

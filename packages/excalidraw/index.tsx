@@ -81,6 +81,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     onPointerUpdate,
     renderTopLeftUI,
     renderTopRightUI,
+    contextMenuItems,
     langCode = defaultLang.code,
     viewModeEnabled,
     interaction,
@@ -222,6 +223,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onPointerUpdate={onPointerUpdate}
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
+          contextMenuItems={contextMenuItems}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}
           interaction={interaction}
@@ -485,7 +487,7 @@ export type {
   SavedChats,
 } from "./components/TTDDialog/types";
 
-export type { ViewportStatusFrame } from "./types";
+export type { ViewportStatusFrame, ContextMenuHostItem } from "./types";
 
 export { zoomToFitBounds, DEFAULT_OVERSCROLL } from "./viewport";
 

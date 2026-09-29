@@ -3,7 +3,7 @@ import React from "react";
 
 import { isExcalidrawPlusSignedUser } from "../app_constants";
 
-import { CommentIcon } from "./comments/CommentParts";
+import { CommentIcon, tooltip } from "./comments/CommentParts";
 import { useComments } from "./comments/CommentsContext";
 import { DebugFooter, isVisualDebuggerEnabled } from "./DebugCanvas";
 import { EncryptedIcon } from "./EncryptedIcon";
@@ -25,7 +25,7 @@ const AddCommentButton = () => {
       className={`app-footer-button${comments.placing ? " is-active" : ""}`}
       aria-label={label}
       aria-pressed={comments.placing}
-      title={label}
+      {...tooltip(label)}
       onClick={() => {
         comments.setDraft(null);
         comments.select(null);

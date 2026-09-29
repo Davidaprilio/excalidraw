@@ -71,6 +71,13 @@ export type { App };
 
 export type SocketId = string & { _brand: "SocketId" };
 
+/** An item the host adds to the context menu (plain label, no translation) */
+export type ContextMenuHostItem = {
+  name: string;
+  label: string;
+  onSelect: () => void;
+};
+
 export type Collaborator = Readonly<{
   pointer?: CollaboratorPointer;
   button?: "up" | "down";
@@ -835,6 +842,15 @@ export interface ExcalidrawProps {
     isMobile: boolean,
     appState: UIAppState,
   ) => JSX.Element | null;
+  /**
+   * Host items shown first in the context menu; `x`/`y` is the right-clicked
+   * point in scene coordinates.
+   */
+  contextMenuItems?: (context: {
+    type: "canvas" | "element";
+    x: number;
+    y: number;
+  }) => ContextMenuHostItem[];
   langCode?: Language["code"];
   viewModeEnabled?: boolean;
   /**

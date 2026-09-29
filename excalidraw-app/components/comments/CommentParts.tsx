@@ -1,11 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  getTooltipDiv,
+  updateTooltipPosition,
+} from "@excalidraw/excalidraw/components/Tooltip";
+
 import api from "../../data/api";
 import { useOptionalAuth } from "../../auth/AuthContext";
 import { Avatar, timeAgo, useDismiss } from "../dashboard/ui";
 
 import type { CommentThread, SceneComment } from "../../data/api";
-import type { ReactNode, SVGProps } from "react";
+import type { PointerEvent, ReactNode, SVGProps } from "react";
+
+/**
+ * Excalidraw's tooltip (the one on undo/redo) straight on an element; its
+ * <Tooltip> wraps children in a div, which breaks pins and inline buttons.
+ */
+export const tooltip = (label: string, long = false) => {
+  const hide = () =>
+    getTooltipDiv().classList.remove("excalidraw-tooltip--visible");
+  return {
+    onPointerEnter: (event: PointerEvent<HTMLElement>) => {
+      const div = getTooltipDiv();
+      div.classList.add("excalidraw-tooltip--visible");
+      div.style.minWidth = long ? "16ch" : "10ch";
+      div.style.maxWidth = long ? "36ch" : "15ch";
+      div.textContent = label;
+      updateTooltipPosition(div, event.currentTarget.getBoundingClientRect());
+    },
+    onPointerLeave: hide,
+    // the click may unmount the element before pointerleave
+    onPointerDown: hide,
+  };
+};
 
 // ---- Icons (16px, stroke = currentColor) ----
 
@@ -41,6 +68,9 @@ export const LinkIcon = icon(
 );
 export const TrashIcon = icon(
   <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />,
+);
+export const MoveIcon = icon(
+  <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />,
 );
 export const CloseIcon = icon(<path d="M18 6 6 18M6 6l12 12" />);
 export const KebabIcon = icon(
@@ -178,7 +208,7 @@ export function EmojiButton({
         type="button"
         className="app-cm-icon-button"
         aria-label={label}
-        title={label}
+        {...tooltip(label)}
         aria-expanded={!!position}
         onClick={(event) =>
           setPosition(
@@ -236,7 +266,7 @@ export function MiniMenu({
         type="button"
         className="app-cm-icon-button"
         aria-label={label}
-        title={label}
+        {...tooltip(label)}
         aria-expanded={open}
         onClick={(event) => {
           event.stopPropagation();
@@ -368,7 +398,7 @@ export function Composer({
           type="button"
           className="app-cm-send"
           aria-label={submitLabel}
-          title={`${submitLabel} (Enter)`}
+          {...tooltip(`${submitLabel} (Enter)`)}
           disabled={!body.trim() || busy}
           onClick={submit}
         >

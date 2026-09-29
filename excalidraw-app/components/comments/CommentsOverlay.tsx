@@ -14,6 +14,8 @@ import {
   commentLink,
   Composer,
   LinkIcon,
+  MoveIcon,
+  tooltip,
   TrashIcon,
 } from "./CommentParts";
 import { useComments } from "./CommentsContext";
@@ -79,6 +81,10 @@ export function CommentsOverlay({
 }) {
   const comments = useComments();
   const [viewport, setViewport] = useState<Viewport | null>(null);
+  // cursor while moving a pin (null until the pointer moves)
+  const [pointer, setPointer] = useState<{ left: number; top: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!excalidrawAPI) {
@@ -99,14 +105,15 @@ export function CommentsOverlay({
     };
   }, [excalidrawAPI]);
 
-  // Esc leaves "place a comment" mode
+  // Esc leaves "place a comment" and "move" modes
   useEffect(() => {
-    if (!comments?.placing) {
+    if (!comments?.placing && !comments?.movingId) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         comments.setPlacing(false);
+        comments.setMovingId(null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -116,13 +123,18 @@ export function CommentsOverlay({
   if (!comments?.sceneId || !viewport) {
     return null;
   }
-  const { threads, selectedId, placing, draft } = comments;
+  const { threads, selectedId, placing, draft, movingId } = comments;
   const selected = threads.find((t) => t.id === selectedId) ?? null;
+  const moving = threads.find((t) => t.id === movingId) ?? null;
 
   // the pin's tip (bottom-left corner) is the commented point
   const toScreen = (x: number, y: number) => ({
     left: (x + viewport.scrollX) * viewport.zoom + viewport.offsetLeft,
     top: (y + viewport.scrollY) * viewport.zoom + viewport.offsetTop,
+  });
+  const toScene = (clientX: number, clientY: number) => ({
+    x: (clientX - viewport.offsetLeft) / viewport.zoom - viewport.scrollX,
+    y: (clientY - viewport.offsetTop) / viewport.zoom - viewport.scrollY,
   });
   const onCanvas = ({ left, top }: { left: number; top: number }) =>
     left >= viewport.offsetLeft &&
@@ -145,8 +157,10 @@ export function CommentsOverlay({
         }`}
       >
         {visible.map((thread) => {
-          const position = toScreen(thread.x, thread.y);
-          if (!onCanvas(position)) {
+          const isMoving = thread.id === movingId;
+          const position =
+            isMoving && pointer ? pointer : toScreen(thread.x, thread.y);
+          if (!isMoving && !onCanvas(position)) {
             return null;
           }
           const first = thread.comments[0];
@@ -156,10 +170,19 @@ export function CommentsOverlay({
               type="button"
               data-comment-pin
               className={`app-comment-pin${
-                thread.id === selectedId ? " is-selected" : ""
-              }${thread.resolved_at ? " is-resolved" : ""}`}
+                thread.id === selectedId || isMoving ? " is-selected" : ""
+              }${thread.resolved_at ? " is-resolved" : ""}${
+                isMoving ? " is-moving" : ""
+              }`}
               style={position}
-              title={first?.body}
+              {...tooltip(
+                `${first?.author_name ?? "Someone"}: ${
+                  (first?.body ?? "").length > 120
+                    ? `${first!.body.slice(0, 120)}…`
+                    : first?.body ?? ""
+                }`,
+                true,
+              )}
               aria-label={`Comment by ${first?.author_name ?? "someone"}: ${
                 first?.body ?? ""
               }`}
@@ -192,15 +215,43 @@ export function CommentsOverlay({
             }}
             onClick={(event) => {
               comments.select(null);
-              comments.setDraft({
-                x:
-                  (event.clientX - viewport.offsetLeft) / viewport.zoom -
-                  viewport.scrollX,
-                y:
-                  (event.clientY - viewport.offsetTop) / viewport.zoom -
-                  viewport.scrollY,
-              });
+              comments.setDraft(toScene(event.clientX, event.clientY));
               comments.setPlacing(false);
+            }}
+          />
+        )}
+
+        {moving && (
+          <div
+            className="app-comments-placing app-comments-placing--move"
+            style={{
+              left: viewport.offsetLeft,
+              top: viewport.offsetTop,
+              width: viewport.width,
+              height: viewport.height,
+            }}
+            onPointerMove={(event) =>
+              setPointer({ left: event.clientX, top: event.clientY })
+            }
+            onPointerLeave={() => setPointer(null)}
+            onClick={async (event) => {
+              const at = toScene(event.clientX, event.clientY);
+              const previous = moving;
+              comments.setMovingId(null);
+              setPointer(null);
+              // show it at the new place right away, undo if saving fails
+              comments.applyThread(moving.id, { ...moving, ...at });
+              try {
+                const res = await api.updateThread(
+                  comments.sceneId!,
+                  moving.id,
+                  at,
+                );
+                comments.applyThread(moving.id, res.thread);
+              } catch (err: any) {
+                comments.applyThread(moving.id, previous);
+                comments.notify(err.message);
+              }
             }}
           />
         )}
@@ -227,10 +278,11 @@ export function CommentsOverlay({
             pin={toScreen(selected.x, selected.y)}
             onThread={(thread) => comments.applyThread(selected.id, thread)}
             onClose={() => comments.select(null)}
+            onMove={() => comments.setMovingId(selected.id)}
           />
         )}
       </div>
-      {placing && (
+      {(placing || moving) && (
         // outside the overlay's stacking context so it stays above Excalidraw's UI
         <span
           className={`app-comments-hint${themeClass}`}
@@ -239,7 +291,9 @@ export function CommentsOverlay({
             left: viewport.offsetLeft + viewport.width / 2,
           }}
         >
-          Click anywhere to comment · Esc to cancel
+          {moving
+            ? "Click to place the comment · Esc to cancel"
+            : "Click anywhere to comment · Esc to cancel"}
         </span>
       )}
     </>
@@ -289,12 +343,14 @@ function ThreadPopup({
   pin,
   onThread,
   onClose,
+  onMove,
 }: {
   sceneId: string;
   thread: CommentThread;
   pin: { left: number; top: number };
   onThread: (thread: CommentThread | null) => void;
   onClose: () => void;
+  onMove: () => void;
 }) {
   const toast = useComments()!.notify;
   const userId = useOptionalAuth()?.user?.id;
@@ -349,7 +405,7 @@ function ThreadPopup({
             thread.resolved_at ? " is-active" : ""
           }`}
           aria-label={thread.resolved_at ? "Reopen" : "Resolve"}
-          title={thread.resolved_at ? "Reopen" : "Resolve"}
+          {...tooltip(thread.resolved_at ? "Reopen" : "Resolve")}
           onClick={() =>
             run(async () => {
               const res = await api.updateThread(sceneId, thread.id, {
@@ -368,7 +424,7 @@ function ThreadPopup({
           type="button"
           className="app-cm-icon-button"
           aria-label="Copy link"
-          title="Copy link"
+          {...tooltip("Copy link")}
           onClick={() =>
             navigator.clipboard
               .writeText(commentLink(sceneId, thread.id))
@@ -378,12 +434,21 @@ function ThreadPopup({
         >
           <LinkIcon />
         </button>
+        <button
+          type="button"
+          className="app-cm-icon-button"
+          aria-label="Move"
+          {...tooltip("Move")}
+          onClick={onMove}
+        >
+          <MoveIcon />
+        </button>
         {thread.created_by === userId && (
           <button
             type="button"
             className="app-cm-icon-button"
             aria-label="Delete thread"
-            title="Delete thread"
+            {...tooltip("Delete thread")}
             onClick={() => {
               if (window.confirm("Delete this comment thread?")) {
                 run(async () => {
@@ -400,7 +465,7 @@ function ThreadPopup({
           type="button"
           className="app-cm-icon-button"
           aria-label="Close"
-          title="Close"
+          {...tooltip("Close")}
           onClick={onClose}
         >
           <CloseIcon />

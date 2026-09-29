@@ -7,13 +7,20 @@ import {
   useState,
 } from "react";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type {
+  ExcalidrawImperativeAPI,
+  ExcalidrawProps,
+} from "@excalidraw/excalidraw/types";
 
 import api from "../../data/api";
 import { serverData } from "../../data/ServerData";
 
 import type { CommentThread } from "../../data/api";
-import type { ReactNode } from "react";
+import type { MutableRefObject, ReactNode } from "react";
+
+export type ContextMenuItemsFn = NonNullable<
+  ExcalidrawProps["contextMenuItems"]
+>;
 
 // Other people's comments show up within this delay
 const POLL_MS = 10000;
@@ -29,6 +36,9 @@ interface CommentsContextValue {
   /** "Add comment": the next click on the canvas places the pin */
   placing: boolean;
   setPlacing: (placing: boolean) => void;
+  /** "Move": this thread's pin follows the cursor until the next click */
+  movingId: string | null;
+  setMovingId: (threadId: string | null) => void;
   /** placed pin waiting for its first comment */
   draft: Point | null;
   setDraft: (point: Point | null) => void;
@@ -48,9 +58,12 @@ export const useComments = () => useContext(CommentsContext);
 
 export function CommentsProvider({
   excalidrawAPI,
+  contextMenuRef,
   children,
 }: {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
+  /** filled with the "Add comment" context menu item (<Excalidraw> sits outside this provider) */
+  contextMenuRef?: MutableRefObject<ContextMenuItemsFn | null>;
   children: ReactNode;
 }) {
   const [sceneId, setSceneId] = useState(
@@ -58,7 +71,8 @@ export function CommentsProvider({
   );
   const [threads, setThreads] = useState<CommentThread[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [placing, setPlacing] = useState(false);
+  const [placing, setPlacingState] = useState(false);
+  const [movingId, setMovingIdState] = useState<string | null>(null);
   const [draft, setDraft] = useState<Point | null>(null);
 
   // follow the open scene (it gets an id on its first save)
@@ -69,6 +83,22 @@ export function CommentsProvider({
       ),
     [],
   );
+
+  // placing a new pin and moving one are exclusive
+  const setPlacing = useCallback((next: boolean) => {
+    setPlacingState(next);
+    if (next) {
+      setMovingIdState(null);
+    }
+  }, []);
+  const setMovingId = useCallback((threadId: string | null) => {
+    setMovingIdState(threadId);
+    if (threadId) {
+      setPlacingState(false);
+      setDraft(null);
+      setSelectedId(null);
+    }
+  }, []);
 
   const reload = useCallback(async () => {
     if (!sceneId) {
@@ -100,6 +130,7 @@ export function CommentsProvider({
       );
       if (!thread) {
         setSelectedId((id) => (id === threadId ? null : id));
+        setMovingIdState((id) => (id === threadId ? null : id));
       }
     },
     [],
@@ -159,6 +190,30 @@ export function CommentsProvider({
     window.history.replaceState({}, "", url);
   }, [linkedThread, threads, scrollToThread]);
 
+  // right click > "Add comment": the new pin goes where the menu was opened
+  useEffect(() => {
+    if (!contextMenuRef) {
+      return;
+    }
+    contextMenuRef.current = sceneId
+      ? ({ x, y }) => [
+          {
+            name: "addComment",
+            label: "Add comment",
+            onSelect: () => {
+              setMovingIdState(null);
+              setPlacingState(false);
+              setSelectedId(null);
+              setDraft({ x, y });
+            },
+          },
+        ]
+      : null;
+    return () => {
+      contextMenuRef.current = null;
+    };
+  }, [contextMenuRef, sceneId]);
+
   const notify = useCallback(
     (message: string) => excalidrawAPI?.setToast({ message, duration: 3000 }),
     [excalidrawAPI],
@@ -172,6 +227,8 @@ export function CommentsProvider({
       select: setSelectedId,
       placing,
       setPlacing,
+      movingId,
+      setMovingId,
       draft,
       setDraft,
       reload,
@@ -186,6 +243,9 @@ export function CommentsProvider({
       threads,
       selectedId,
       placing,
+      setPlacing,
+      movingId,
+      setMovingId,
       draft,
       reload,
       createThread,

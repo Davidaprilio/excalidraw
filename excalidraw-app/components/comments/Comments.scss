@@ -176,6 +176,16 @@
   pointer-events: auto;
 }
 
+// moving a pin: it follows the cursor, the layer under it takes the click
+.app-comments-placing--move {
+  cursor: move;
+}
+
+.app-comment-pin.is-moving {
+  pointer-events: none;
+  opacity: 0.85;
+}
+
 // "Click anywhere to comment" hint: its own fixed element above Excalidraw's
 // toolbars (the overlay's z-index 3 would keep it underneath)
 .app-comments-hint {

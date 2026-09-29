@@ -82,7 +82,10 @@ export const ContextMenu = React.memo(
             const actionName = item.name;
             let label = "";
             if (item.label) {
-              if (typeof item.label === "function") {
+              if (actionName.startsWith("custom:")) {
+                // host item (`contextMenuItems` prop): a plain label
+                label = item.label as string;
+              } else if (typeof item.label === "function") {
                 label = t(
                   item.label(
                     elements,

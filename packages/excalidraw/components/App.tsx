@@ -13198,7 +13198,11 @@ class App extends React.Component<AppProps, AppState> {
       },
       () => {
         this.setState({
-          contextMenu: { top, left, items: this.getContextMenuItems(type) },
+          contextMenu: {
+            top,
+            left,
+            items: this.getContextMenuItems(type, { x, y }),
+          },
         });
       },
     );
@@ -13555,6 +13559,30 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private getContextMenuItems = (
+    type: "canvas" | "element",
+    point: { x: number; y: number },
+  ): ContextMenuItems => {
+    const hostItems = (
+      this.props.contextMenuItems?.({ type, ...point }) ?? []
+    ).map(
+      (item): Action => ({
+        // "custom:" tells the ContextMenu the label is not a translation key
+        name: `custom:${item.name}` as Action["name"],
+        label: item.label,
+        trackEvent: false,
+        perform: () => {
+          item.onSelect();
+          return false;
+        },
+      }),
+    );
+    const items = this.getDefaultContextMenuItems(type);
+    return hostItems.length
+      ? [...hostItems, CONTEXT_MENU_SEPARATOR, ...items]
+      : items;
+  };
+
+  private getDefaultContextMenuItems = (
     type: "canvas" | "element",
   ): ContextMenuItems => {
     const options: ContextMenuItems = [];

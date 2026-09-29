@@ -11,6 +11,7 @@ import {
   FilterIcon,
   MiniMenu,
   SearchIcon,
+  tooltip,
 } from "./CommentParts";
 import { useComments } from "./CommentsContext";
 
@@ -116,7 +117,7 @@ function FilterMenu({
         type="button"
         className={`app-cm-icon-button${filter !== "open" ? " is-active" : ""}`}
         aria-label="Filter comments"
-        title="Filter comments"
+        {...tooltip("Filter comments")}
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
@@ -204,7 +205,7 @@ function ThreadItem({ thread }: { thread: CommentThread }) {
               thread.resolved_at ? " is-active" : ""
             }`}
             aria-label={thread.resolved_at ? "Reopen" : "Resolve"}
-            title={thread.resolved_at ? "Reopen" : "Resolve"}
+            {...tooltip(thread.resolved_at ? "Reopen" : "Resolve")}
             onClick={async () => {
               const res = await api.updateThread(sceneId, thread.id, {
                 resolved: !thread.resolved_at,
