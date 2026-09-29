@@ -16,6 +16,7 @@ import { useWorkspace } from "../WorkspaceContext";
 import { navigateTo } from "../../../navigation";
 
 import type {
+  InviteSuggestion,
   WorkspaceInvite,
   WorkspaceMember,
   WorkspaceRole,
@@ -292,12 +293,10 @@ function InviteForm({
         automatically: the invite link is copied for you to share.
       </p>
       <form onSubmit={submit} className="flex flex-wrap gap-2">
-        <input
-          type="email"
+        <EmailSuggestInput
+          workspaceId={workspace.id}
           value={email}
-          placeholder="name@company.com"
-          onChange={(event) => setEmail(event.target.value)}
-          className="min-w-60 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+          onChange={setEmail}
         />
         <select
           aria-label="Role"
@@ -321,5 +320,139 @@ function InviteForm({
         </Button>
       </form>
     </section>
+  );
+}
+
+const SUGGEST_DELAY_MS = 200;
+
+/**
+ * Email field of "Invite people" that suggests registered users by name or
+ * email (unless the server turned it off with INVITE_USER_SUGGESTIONS=false).
+ */
+function EmailSuggestInput({
+  workspaceId,
+  value,
+  onChange,
+}: {
+  workspaceId: string;
+  value: string;
+  onChange: (email: string) => void;
+}) {
+  const [users, setUsers] = useState<InviteSuggestion[]>([]);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  // the server said suggestions are off: stop asking
+  const [enabled, setEnabled] = useState(true);
+
+  useEffect(() => {
+    const q = value.trim();
+    if (!enabled || !open || q.length < 2) {
+      setUsers([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api
+        .inviteSuggestions(workspaceId, q)
+        .then((res) => {
+          if (!cancelled) {
+            setEnabled(res.enabled);
+            setUsers(res.users);
+            setActive(0);
+          }
+        })
+        .catch(() => !cancelled && setUsers([]));
+    }, SUGGEST_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [workspaceId, value, open, enabled]);
+
+  const pick = (user: InviteSuggestion) => {
+    onChange(user.email);
+    setOpen(false);
+  };
+  const showList = open && users.length > 0;
+
+  return (
+    <div className="relative min-w-60 flex-1">
+      <input
+        type="email"
+        value={value}
+        placeholder="name@company.com"
+        aria-label="Email"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={showList}
+        aria-controls="invite-suggestions"
+        aria-activedescendant={
+          showList ? `invite-suggestion-${users[active]?.id}` : undefined
+        }
+        autoComplete="off"
+        onChange={(event) => {
+          onChange(event.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(event) => {
+          if (!showList) {
+            return;
+          }
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const step = event.key === "ArrowDown" ? 1 : -1;
+            setActive((active + step + users.length) % users.length);
+          } else if (event.key === "Enter") {
+            // pick the highlighted person instead of submitting the form
+            event.preventDefault();
+            pick(users[active]);
+          } else if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+      />
+      {showList && (
+        <ul
+          id="invite-suggestions"
+          role="listbox"
+          className="absolute top-full right-0 left-0 z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+        >
+          {users.map((user, index) => (
+            <li
+              key={user.id}
+              id={`invite-suggestion-${user.id}`}
+              role="option"
+              aria-selected={index === active}
+              // mousedown: before the input's blur closes the list
+              onMouseDown={(event) => {
+                event.preventDefault();
+                pick(user);
+              }}
+              onMouseEnter={() => setActive(index)}
+              className={`flex cursor-pointer items-center gap-3 px-3 py-2 ${
+                index === active ? "bg-indigo-50" : ""
+              }`}
+            >
+              <Avatar
+                name={user.name || user.email}
+                size="h-7 w-7 text-xs"
+                src={api.avatarUrl(user.id, user.avatar_version)}
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium text-gray-900">
+                  {user.name || user.email}
+                </span>
+                <span className="block truncate text-xs text-gray-500">
+                  {user.email}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

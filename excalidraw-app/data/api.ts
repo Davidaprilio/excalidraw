@@ -64,6 +64,13 @@ export interface SceneAccess {
   users: SceneAccessUser[];
 }
 
+export interface InviteSuggestion {
+  id: string;
+  name: string | null;
+  email: string;
+  avatar_version: string | null;
+}
+
 export interface SecurityOverview {
   totp: {
     enabled: boolean;
@@ -769,6 +776,15 @@ class ApiClient {
   async listInvites(workspaceId: string) {
     return this.request<{ invites: WorkspaceInvite[] }>(
       `/workspaces/${workspaceId}/invites`,
+    );
+  }
+
+  /** Registered users matching `q`, to pick from when inviting (admins only) */
+  async inviteSuggestions(workspaceId: string, q: string) {
+    return this.request<{ enabled: boolean; users: InviteSuggestion[] }>(
+      `/workspaces/${workspaceId}/invite-suggestions?q=${encodeURIComponent(
+        q,
+      )}`,
     );
   }
 
