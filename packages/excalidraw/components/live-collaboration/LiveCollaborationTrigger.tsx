@@ -13,15 +13,19 @@ const LiveCollaborationTrigger = ({
   isCollaborating,
   onSelect,
   editorInterface,
+  iconOnly = false,
   ...rest
 }: {
   isCollaborating: boolean;
   onSelect: () => void;
   editorInterface?: EditorInterface;
+  /** always show the share icon instead of the "Share" label */
+  iconOnly?: boolean;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) => {
   const appState = useUIAppState();
 
   const showIconOnly =
+    iconOnly ||
     editorInterface?.formFactor !== "desktop" ||
     appState.width < MQ_MIN_WIDTH_DESKTOP;
 

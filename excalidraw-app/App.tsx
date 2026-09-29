@@ -1190,6 +1190,8 @@ const ExcalidrawWrapper = () => {
               <EditorUserAvatar />
               {collabError.message && <CollabError collabError={collabError} />}
               <LiveCollaborationTrigger
+                // self-hosted: an icon, matching the avatar next to it
+                iconOnly={IS_SELF_HOSTED}
                 isCollaborating={isCollaborating}
                 onSelect={() =>
                   setShareDialogState({ isOpen: true, type: "share" })
