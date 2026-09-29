@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -127,37 +128,111 @@ export function DropdownMenu({
             side === "top" ? "bottom-full mb-2" : "top-full mt-1"
           } ${align === "right" ? "right-0" : "left-0"} ${menuClassName}`}
         >
-          {items.map((item, index) =>
-            item === "separator" ? (
-              <div key={index} className="my-1 border-t border-gray-100" />
-            ) : (
-              <button
-                key={item.label}
-                type="button"
-                role="menuitem"
-                className={`flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-sm ${
-                  item.danger
-                    ? "text-red-600 hover:bg-red-50"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-                onClick={() => {
-                  setOpen(false);
-                  item.onSelect();
-                }}
-              >
-                <span className="flex w-4 justify-center text-gray-400">
-                  {item.checked ? (
-                    <span className="text-indigo-600">✓</span>
-                  ) : (
-                    item.icon
-                  )}
-                </span>
-                {item.label}
-              </button>
-            ),
-          )}
+          <MenuList items={items} onClose={close} />
         </div>
       )}
+    </div>
+  );
+}
+
+/** The items of a DropdownMenu / ContextMenu */
+function MenuList({
+  items,
+  onClose,
+}: {
+  items: MenuItem[];
+  onClose: () => void;
+}) {
+  return (
+    <>
+      {items.map((item, index) =>
+        item === "separator" ? (
+          <div key={index} className="my-1 border-t border-gray-100" />
+        ) : (
+          <button
+            key={item.label}
+            type="button"
+            role="menuitem"
+            className={`flex w-full cursor-pointer items-center gap-2.5 px-3 py-2 text-left text-sm ${
+              item.danger
+                ? "text-red-600 hover:bg-red-50"
+                : "text-gray-700 hover:bg-gray-50"
+            }`}
+            onClick={() => {
+              onClose();
+              item.onSelect();
+            }}
+          >
+            <span className="flex w-4 justify-center text-gray-400">
+              {item.checked ? (
+                <span className="text-indigo-600">✓</span>
+              ) : (
+                item.icon
+              )}
+            </span>
+            {item.label}
+          </button>
+        ),
+      )}
+    </>
+  );
+}
+
+/**
+ * Right-click menu at the cursor (same items/look as DropdownMenu). Kept inside
+ * the viewport; closes on outside click, Escape, scroll or resize.
+ */
+export function ContextMenu({
+  at,
+  items,
+  onClose,
+}: {
+  at: { x: number; y: number };
+  items: MenuItem[];
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState(() => ({ left: at.x, top: at.y }));
+  useDismiss(ref, onClose);
+
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    if (!menu) {
+      return;
+    }
+    const margin = 8;
+    const { width, height } = menu.getBoundingClientRect();
+    setPosition({
+      left: Math.max(
+        margin,
+        at.x + width > window.innerWidth - margin ? at.x - width : at.x,
+      ),
+      top: Math.max(
+        margin,
+        at.y + height > window.innerHeight - margin ? at.y - height : at.y,
+      ),
+    });
+  }, [at]);
+
+  useEffect(() => {
+    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("resize", onClose);
+    return () => {
+      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      style={position}
+      className="fixed z-50 min-w-48 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+      onClick={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <MenuList items={items} onClose={onClose} />
     </div>
   );
 }

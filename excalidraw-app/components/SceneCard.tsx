@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import api from "../data/api";
 import { ensureSceneThumbnail } from "../data/thumbnails";
 
 import { DashboardIcon, MoreIcon } from "./dashboard/icons";
-import { DropdownMenu, timeAgo } from "./dashboard/ui";
+import { ContextMenu, DropdownMenu, timeAgo } from "./dashboard/ui";
 
 import type { MenuItem } from "./dashboard/ui";
 import type { SceneSummary } from "../data/api";
@@ -76,6 +76,9 @@ export function SceneCard({
 }) {
   const thumbnailUrl = useSceneThumbnail(scene);
   const [title, setTitle] = useState(scene.title);
+  // right click on the card: the "..." menu at the cursor
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const closeMenu = useCallback(() => setMenuAt(null), []);
 
   useEffect(() => {
     setTitle(scene.title);
@@ -93,7 +96,20 @@ export function SceneCard({
   const timestamp = scene.deleted_at ?? scene.updated_at;
 
   return (
-    <div className="group flex flex-col">
+    <div
+      className="group flex flex-col"
+      onContextMenu={(event) => {
+        // the rename field keeps the browser's menu (paste, spelling...)
+        if (renaming || !menuItems.length) {
+          return;
+        }
+        event.preventDefault();
+        setMenuAt({ x: event.clientX, y: event.clientY });
+      }}
+    >
+      {menuAt && (
+        <ContextMenu at={menuAt} items={menuItems} onClose={closeMenu} />
+      )}
       {/* The menu is a sibling of the clickable area: no button inside a button,
           and not clipped by the thumbnail's overflow-hidden */}
       <div className="relative">
